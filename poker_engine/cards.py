@@ -41,6 +41,9 @@ class Card:
 
     def __hash__(self):
         return hash((self.rank, self.suit))
+
+    def to_dict(self):
+            return {"rank": self.rank.name, "suit": self.suit.value}
     
 
 #building out a deck now
@@ -62,5 +65,5 @@ class Deck:
     def deal_card(self):
         return self.cards.pop() if self.cards else None
 
-
+    
 

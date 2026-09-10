@@ -1,0 +1,5 @@
+pytest
+django
+channels
+channels_redis
+daphne
