@@ -94,4 +94,17 @@ def decide_action(
     # 3. Decide the margin above breakeven that justifies raising instead of
     #    just calling, and how much to raise. Keep it simple to start (e.g.
     #    a fixed pot fraction) -- you can make this more sophisticated later.
-    pass
+
+    if amount_to_call == 0:
+        if equity > 0.55:
+            return ("raise", pot // 2) if pot > 0 else ("raise", 10)
+        else:
+            return ("check", 0)
+    else:
+        if equity < breakeven_equity(amount_to_call, pot):
+            return ("fold", 0)
+        elif equity > breakeven_equity(amount_to_call, pot) + 0.1:
+            return ("raise", pot // 2) if pot > 0 else ("raise", 10)
+        else:
+            return ("call", amount_to_call) 
+
