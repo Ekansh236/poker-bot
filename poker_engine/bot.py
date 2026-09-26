@@ -104,7 +104,54 @@ def decide_action(
         if equity < breakeven_equity(amount_to_call, pot):
             return ("fold", 0)
         elif equity > breakeven_equity(amount_to_call, pot) + 0.1:
-            return ("raise", pot // 2) if pot > 0 else ("raise", 10)
+            raise_increment = pot // 2 if pot > 0 else 10
+            return ("raise", amount_to_call + raise_increment)
         else:
-            return ("call", amount_to_call) 
+            return ("call", amount_to_call)
+
+
+def bot_decide(round_, seat) -> tuple[str, int]:
+    """Given a live Round and this bot's Seat, decide what to do.
+
+    Pulls the real values estimate_equity() and decide_action() need off
+    the live game objects, then chains the two together.
+    """
+    # TODO(human): implement this wrapper.
+    #
+    # 1. hole_cards = seat.cards, community_cards = round_.community_cards.
+    #
+    # 2. num_opponents: count seats in round_.seats that are NOT this seat
+    #    and NOT folded (is_folded). Include all-in seats -- they're still
+    #    competing for the pot even though they can't act anymore.
+    #
+    #    Edge case worth guarding against: what if that count comes out to
+    #    0? estimate_equity(..., num_opponents=0, ...) crashes -- confirmed
+    #    above, max() on an empty list of opponent ranks. This shouldn't
+    #    happen in a well-formed game loop (the hand ends via
+    #    check_if_all_but_one_folded() before a bot would be asked to act
+    #    with zero opponents left), but decide what THIS function should do
+    #    if it ever does happen -- crash loudly, or handle it explicitly?
+    #
+    # 3. amount_to_call = round_.current_bet_to_match - seat.bet_this_street
+    #    pot = round_.pot
+    #
+    # 4. equity = estimate_equity(hole_cards, community_cards, num_opponents)
+    #    -- pick a num_trials value. More trials = more accurate but slower;
+    #    this tradeoff is exactly why sub-step 4 (Celery) exists, but this
+    #    function doesn't need to solve that yet, just pick something
+    #    reasonable for now.
+    #
+    # 5. return decide_action(equity, amount_to_call, pot)
+    hole_cards = seat.cards
+    community_cards = round_.community_cards
+    num_opponents = sum(
+        1 for s in round_.seats if s != seat and not s.is_folded
+    )
+    if num_opponents == 0:
+        # If there are no opponents, the bot can check or bet freely.
+        return ("check", 0)
+    amount_to_call = round_.current_bet_to_match - seat.bet_this_street
+    pot = round_.pot
+    equity = estimate_equity(hole_cards, community_cards, num_opponents, num_trials=1000)
+    return decide_action(equity, amount_to_call, pot)   
 

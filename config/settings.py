@@ -81,6 +81,11 @@ CHANNEL_LAYERS = {
     },
 }
 
+# Same Redis instance as the channel layer above -- broker holds pending task
+# messages, result backend holds their return values once a worker finishes.
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
+CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0'
+
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
