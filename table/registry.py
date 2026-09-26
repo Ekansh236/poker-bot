@@ -9,6 +9,7 @@ from poker_engine.seat import Seat
 
 SEATS_PER_TABLE = 2
 LOCK_TIMEOUT_SECONDS = 10  # safety valve -- auto-releases if a worker crashes mid-lock
+BOT_PLAYER_ID = "bot"
 
 # Same host/port as CHANNEL_LAYERS in settings.py -- one Redis instance backs
 # both the pub/sub channel layer and this shared game-state store.
@@ -33,34 +34,27 @@ def claim_seat(round_: Round, player_id: str) -> Seat:
     raise ValueError(f"Table is full -- no open seat for {player_id}.")
 
 
-# TODO(human): implement locked_round(table_id) as a context manager.
-#
-# This replaces the old get_round() -- instead of just handing back a Round
-# object (the exact lost-update bug we diagrammed: two workers reading the
-# same stale state and one overwriting the other's write), it must:
-#
-#   1. Acquire a Redis-backed lock scoped to this table_id. redis-py gives
-#      you this for free: redis_client.lock(name, timeout=LOCK_TIMEOUT_SECONDS)
-#      returns an object that is ITSELF a context manager (supports `with`).
-#      Pick a lock key name that's clearly table-scoped, e.g. f"lock:table:{table_id}".
-#
-#   2. While holding the lock, GET the pickled Round from Redis (key it by
-#      table_id, e.g. f"round:{table_id}") and unpickle it with pickle.loads.
-#      If nothing's stored yet (GET returns None), build a fresh one with
-#      _new_round() instead.
-#
-#   3. yield that Round object out -- this is what makes
-#      `with registry.locked_round(table_id) as round_:` work for callers.
-#
-#   4. After the caller's `with` block finishes -- whether it completed
-#      normally or raised -- pickle the (possibly mutated) Round with
-#      pickle.dumps and SET it back into Redis, THEN release the lock.
-#      Use try/finally so the lock always releases even on an exception.
-#
-# You'll want the @contextlib.contextmanager decorator (already imported
-# above) to write this as a generator function rather than a full class.
+def seat_bot_if_needed(round_: Round) -> None:
+    """Auto-fill any still-empty seat with a bot.
+
+    Simplest possible matchmaking for a heads-up-only table: once a human
+    claims one seat, whatever's left over becomes a bot immediately, so
+    every table is always playable with no separate lobby/invite flow.
+    """
+    for seat in round_.seats:
+        if seat.player is None:
+            seat.player = BOT_PLAYER_ID
+            seat.is_bot = True
+
+
 @contextlib.contextmanager
 def locked_round(table_id: str):
+    """Safe read-modify-write access to a table's shared Round state.
+
+    Acquires a Redis-backed lock scoped to this table, loads (or creates)
+    the Round, yields it to the caller, then persists whatever the caller
+    mutated and releases the lock -- even if the caller raised.
+    """
     lock = redis_client.lock(f"lock:table:{table_id}", timeout=LOCK_TIMEOUT_SECONDS)
     with lock:
         pickled_round = redis_client.get(f"round:{table_id}")

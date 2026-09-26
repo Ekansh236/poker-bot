@@ -4,6 +4,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 from table import registry
 from table.serializers import serialize_round
+from table.tasks import bot_decide_task
 
 
 class TableConsumer(AsyncWebsocketConsumer):
@@ -17,6 +18,7 @@ class TableConsumer(AsyncWebsocketConsumer):
         # so it must happen under the lock too -- see registry.locked_round.
         with registry.locked_round(self.table_id) as round_:
             registry.claim_seat(round_, self.player_id)
+            registry.seat_bot_if_needed(round_)
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
@@ -47,28 +49,24 @@ class TableConsumer(AsyncWebsocketConsumer):
                 },
             )
 
-        # TODO(human): wire this up to locked_round() instead of a cached
-        # self.round/self.seat (there is no such cache anymore -- connect()
-        # no longer stores one, for exactly the reason we just discussed:
-        # every locked_round() call deserializes brand-new Round/Seat objects,
-        # so a Seat cached from connect() would never match by identity
-        # inside a later, separately-loaded Round).
-        #
-        # Steps:
-        #   1. Open `with registry.locked_round(self.table_id) as round_:`.
-        #   2. Inside it, re-locate THIS connection's seat by calling
-        #      registry.claim_seat(round_, self.player_id) again -- it's
-        #      idempotent, an already-seated player just gets their existing
-        #      seat back, freshly scoped to this round_.
-        #   3. try/except ValueError around round_.apply_action(seat, action,
-        #      amount), same shape as before:
-        #        - on ValueError: self.send() the error to only this connection
-        #        - on success: you'll want serialize_round(round_) for the
-        #          broadcast -- build that payload while still inside the
-        #          `with` block (round_ isn't valid to use once it exits),
-        #          but the actual group_send() call can happen either inside
-        #          or after the block ends -- your call.
-        pass
+            # TODO(human): if it's now a bot's turn, dispatch the task.
+            #
+            # Check round_.seats[round_.current_turn_index].is_bot. If it's
+            # True, call bot_decide_task.delay(self.table_id, <that seat's
+            # player_id>) -- .delay() is Celery's real async enqueue (unlike
+            # sub-step 4's direct-call testing, this actually requires a
+            # running `celery -A config worker` process to pick it up).
+            #
+            # Worth reasoning through before you write this: you're still
+            # inside `with registry.locked_round(self.table_id) as round_:`
+            # right now, meaning THIS process is still holding the Redis
+            # lock. bot_decide_task will try to acquire that same lock
+            # itself the moment a worker picks it up. Does dispatching here,
+            # before this `with` block exits, cause a problem? Walk through
+            # what actually happens to the task while this lock is held.
+            if round_.seats[round_.current_turn_index].is_bot:
+                bot_decide_task.delay(self.table_id, round_.seats[round_.current_turn_index].player)
+                
 
     async def table_message(self, event):
         await self.send(text_data=json.dumps(event['message']))

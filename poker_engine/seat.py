@@ -2,9 +2,10 @@ from poker_engine.cards import Card, Rank, Suit
 from poker_engine.display import card_to_ascii, hand_to_ascii
 
 class Seat:
-    def __init__(self, player, cards):
+    def __init__(self, player, cards, is_bot=False):
         self.player = player
         self.cards = cards
+        self.is_bot = is_bot
         self.stack = 500
         self.bet_this_street = 0
         self.is_folded = False
