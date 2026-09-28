@@ -106,7 +106,19 @@ class Round:
         # and start_new_hand()/deal_hole_cards() both already do to every
         # seat's has_acted_this_street?) -- that's what stops the loop
         # once a real player needs to act.
-        pass
+        while self.is_betting_round_complete():
+            if self.check_if_all_but_one_folded():
+                self.showdown_resolution()
+                self.start_new_hand()
+            elif self.current_round_state == RoundState.FLOP:
+                self.flop_community_cards()
+            elif self.current_round_state == RoundState.TURN:
+                self.turn_community_card()
+            elif self.current_round_state == RoundState.RIVER:
+                self.river_community_card()
+            elif self.current_round_state == RoundState.SHOWDOWN:
+                self.showdown_resolution()
+                self.start_new_hand()
 
     def burn_card(self):
         self.deck.deal_card()  # Burn a card (remove the top card from the deck)
@@ -217,7 +229,7 @@ class Round:
         active_seats = [seat for seat in self.seats if not seat.is_folded]
         if len(active_seats) <= 1:
             return True
-        return all(seat.has_acted_this_street and seat.bet_this_street == self.current_bet_to_match for seat in active_seats)
+        return all((seat.has_acted_this_street or seat.is_all_in) and seat.bet_this_street == self.current_bet_to_match for seat in active_seats)
 
     def compute_pots(self):
         levels = sorted(set(seat.total_contributed_to_pot for seat in self.seats if seat.total_contributed_to_pot > 0))
