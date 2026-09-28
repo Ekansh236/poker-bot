@@ -73,6 +73,8 @@ class Round:
             self.current_round_state = RoundState.TURN  # Transition to FLOP state
             self.community_cards.extend([self.deck.deal_card() for _ in range(3)])  # Deal 3 community cards
             self.current_bet_to_match = 0  # Reset the current bet to match for the new street
+            # Big blind (non-button) acts first on every postflop street.
+            self.current_turn_index = 1
             for seat in self.seats:
                 seat.has_acted_this_street = False  # Reset action status for all seats
                 seat.bet_this_street = 0  # Reset the bet for all seats
@@ -81,6 +83,7 @@ class Round:
 
     def turn_community_card(self):
         if RoundState.TURN == self.current_round_state:
+            self.current_turn_index = 1
             self.burn_card()  # Burn a card before the turn
             self.current_round_state = RoundState.RIVER  # Transition to RIVER state
             self.community_cards.append(self.deck.deal_card())
@@ -93,6 +96,7 @@ class Round:
 
     def river_community_card(self):
         if RoundState.RIVER == self.current_round_state:
+            self.current_turn_index = 1
             self.burn_card()  # Burn a card before the river
             self.current_round_state = RoundState.SHOWDOWN  # Transition to SHOWDOWN state
             self.community_cards.append(self.deck.deal_card())
