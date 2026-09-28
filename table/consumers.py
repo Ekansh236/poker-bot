@@ -34,16 +34,10 @@ class TableConsumer(AsyncWebsocketConsumer):
         with registry.locked_round(self.table_id) as round_:
             seat = registry.claim_seat(round_, self.player_id)
             try:
-                round_.apply_action(seat, action, amount)
+                round_.apply_action_and_advance(seat, action, amount)
             except ValueError as e:
                 await self.send(text_data=json.dumps({"error": str(e)}))
                 return
-
-            # Auto-advance as far as the new state allows -- next street,
-            # a fold-win/showdown, or a brand new hand -- before telling
-            # anyone what happened, so the broadcast reflects the fully
-            # settled state, not a mid-transition snapshot.
-            round_.advance_if_possible()
 
             # Broadcast the updated round state to all players at the table.
             broadcast_payload = serialize_round(round_)
@@ -55,24 +49,8 @@ class TableConsumer(AsyncWebsocketConsumer):
                 },
             )
 
-            # TODO(human): if it's now a bot's turn, dispatch the task.
-            #
-            # Check round_.seats[round_.current_turn_index].is_bot. If it's
-            # True, call bot_decide_task.delay(self.table_id, <that seat's
-            # player_id>) -- .delay() is Celery's real async enqueue (unlike
-            # sub-step 4's direct-call testing, this actually requires a
-            # running `celery -A config worker` process to pick it up).
-            #
-            # Worth reasoning through before you write this: you're still
-            # inside `with registry.locked_round(self.table_id) as round_:`
-            # right now, meaning THIS process is still holding the Redis
-            # lock. bot_decide_task will try to acquire that same lock
-            # itself the moment a worker picks it up. Does dispatching here,
-            # before this `with` block exits, cause a problem? Walk through
-            # what actually happens to the task while this lock is held.
             if round_.seats[round_.current_turn_index].is_bot:
                 bot_decide_task.delay(self.table_id, round_.seats[round_.current_turn_index].player)
-                
 
     async def table_message(self, event):
         await self.send(text_data=json.dumps(event['message']))

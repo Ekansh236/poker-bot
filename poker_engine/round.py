@@ -62,6 +62,21 @@ class Round:
         self.button_index = self._non_button_index()  # Rotate the button
         self.deal_hole_cards()
 
+    def apply_action_and_advance(self, seat: Seat, action: str, amount: int = 0):
+        """apply_action() followed by advance_if_possible(), as one call.
+
+        Every caller that mutates live game state (WebSocket consumers,
+        Celery tasks) needs both steps every time, in this order -- forgetting
+        advance_if_possible() leaves current_turn_index pointing at a seat
+        that already finished its street, which lets that seat act again on
+        stale state (see the bot_decide_task bug this was written to fix).
+        Kept as a separate method from apply_action() itself so the granular,
+        single-action tests can still call apply_action() directly without
+        triggering cascading street/hand transitions mid-assertion.
+        """
+        self.apply_action(seat, action, amount)
+        self.advance_if_possible()
+
     def advance_if_possible(self):
         """Auto-advance as far as the current state allows.
 
