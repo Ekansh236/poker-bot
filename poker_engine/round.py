@@ -27,32 +27,9 @@ class Round:
         if RoundState.PRE_FLOP != self.current_round_state:
             raise ValueError("Hole cards can only be dealt during the PRE_FLOP round state.")
 
-        # TODO(human): post blinds before dealing.
-        #
-        # Scoped simplification for this first pass (matches what we agreed
-        # a while back): assume self.seats[0] is always the button/small
-        # blind, and self.seats[1] is always the big blind. Real button
-        # rotation across hands is a later sub-step, not this one.
-        #
-        # 1. self.seats[0].put_in_pot(self.SMALL_BLIND) -- this already
-        #    handles the stack deduction and bet_this_street bookkeeping,
-        #    same as any other bet. Do the same for seats[1] with BIG_BLIND.
-        #
-        # 2. Add both actual amounts (put_in_pot returns what was actually
-        #    taken, which may be less than requested if a stack is short)
-        #    to self.pot -- blinds are real chips in the pot, same as any
-        #    other contribution.
-        #
-        # 3. self.current_bet_to_match needs to reflect the big blind, not
-        #    the old hardcoded 0 a few lines below -- think about why: if
-        #    it's still 0, what would apply_action() let the small blind
-        #    do that shouldn't be legal (check for free, despite having
-        #    only posted half the big blind)?
-        #
-        # 4. self.current_turn_index needs to point at the button/small
-        #    blind for preflop action, not whatever it defaulted to -- this
-        #    is the rule you just reasoned through: button acts FIRST
-        #    preflop in heads-up.
+        # Post blinds before dealing. Fixed scoping for now: seats[0] is
+        # always the button/small blind, seats[1] the big blind -- real
+        # button rotation across hands is a later sub-step.
         small_blind_posted = self.seats[0].put_in_pot(self.SMALL_BLIND)
         big_blind_posted = self.seats[1].put_in_pot(self.BIG_BLIND)
         self.pot += small_blind_posted + big_blind_posted
@@ -63,6 +40,47 @@ class Round:
         self.current_bet_to_match = self.BIG_BLIND  # Reset the current bet to match for the new hand
         self.current_round_state = RoundState.FLOP  # Transition to FLOP state after dealing hole cards
         self.current_turn_index = 0
+
+    def start_new_hand(self):
+        """Reset this Round in place and deal a fresh hand.
+
+        Reuses the SAME Seat objects (preserving stacks -- winnings and
+        losses carry forward) rather than building brand-new ones, which is
+        exactly the gap Seat.reset_for_new_hand() was written for back in
+        Milestone 2 but never actually got called anywhere until now.
+        """
+        # TODO(human): implement this.
+        #
+        # Needs to reset every per-hand piece of state, both on the seats
+        # and on the Round itself, then deal a fresh hand:
+        #
+        # 1. Call seat.reset_for_new_hand() for every seat in self.seats --
+        #    already written, clears bet_this_street/is_folded/is_all_in/
+        #    total_contributed_to_pot, but deliberately leaves stack alone.
+        #
+        # 2. Reset the Round-level fields that deal_hole_cards() didn't
+        #    already handle for you: community_cards back to [], pot back
+        #    to 0, current_bet_to_match back to 0.
+        #
+        # 3. Build a fresh, shuffled Deck and assign it to self.deck -- the
+        #    old one is nearly exhausted after a full hand (hole cards +
+        #    flop/turn/river + burns), reusing it isn't an option.
+        #
+        # 4. current_round_state needs to go back to RoundState.PRE_FLOP --
+        #    but where in this sequence does that have to happen relative
+        #    to step 5? Check deal_hole_cards()'s very first line again.
+        #
+        # 5. Call self.deal_hole_cards() -- this now also posts blinds and
+        #    sets current_turn_index correctly, so you don't need to
+        #    duplicate any of that here.
+        for seat in self.seats:
+            seat.reset_for_new_hand()
+        self.community_cards = []
+        self.pot = 0
+        self.deck = Deck()
+        self.deck.shuffle()
+        self.current_round_state = RoundState.PRE_FLOP
+        self.deal_hole_cards()
 
     def burn_card(self):
         self.deck.deal_card()  # Burn a card (remove the top card from the deck)
