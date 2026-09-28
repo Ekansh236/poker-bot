@@ -39,6 +39,12 @@ class TableConsumer(AsyncWebsocketConsumer):
                 await self.send(text_data=json.dumps({"error": str(e)}))
                 return
 
+            # Auto-advance as far as the new state allows -- next street,
+            # a fold-win/showdown, or a brand new hand -- before telling
+            # anyone what happened, so the broadcast reflects the fully
+            # settled state, not a mid-transition snapshot.
+            round_.advance_if_possible()
+
             # Broadcast the updated round state to all players at the table.
             broadcast_payload = serialize_round(round_)
             await self.channel_layer.group_send(
