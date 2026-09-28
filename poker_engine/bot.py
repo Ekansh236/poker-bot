@@ -71,39 +71,29 @@ def breakeven_equity(amount_to_call: int, pot: int) -> float:
 
 
 def decide_action(
-    equity: float, amount_to_call: int, pot: int
+    equity: float, amount_to_call: int, pot: int, is_button: bool = False
 ) -> tuple[str, int]:
     """Turn an equity estimate + the current betting situation into an action.
 
     Returns (action, amount), where action is "fold", "call", "check", or
     "raise", matching the strings Round.apply_action() already expects.
     """
-    # TODO(human): implement the decision logic.
-    #
-    # 1. If amount_to_call == 0, there's nothing to call -- breakeven_equity's
-    #    division doesn't even make sense here (dividing by a call amount of
-    #    zero). Decide what the bot does when checking is free: always check?
-    #    Or bet/raise anyway if equity is strong, since nobody's forcing a
-    #    decision either way?
-    #
-    # 2. Otherwise, call breakeven_equity(amount_to_call, pot) to get the
-    #    threshold. Compare it against `equity`:
-    #    - equity below the threshold -> folding is correct long-run.
-    #    - equity at or above the threshold -> at least a call is justified.
-    #
-    # 3. Decide the margin above breakeven that justifies raising instead of
-    #    just calling, and how much to raise. Keep it simple to start (e.g.
-    #    a fixed pot fraction) -- you can make this more sophisticated later.
+    # Position adjustment: the button will have the information advantage
+    # of acting last for the rest of the hand, so it's worth playing
+    # slightly looser (lower thresholds); out of position, slightly
+    # tighter (higher thresholds). 0.02 is a starting value, not a derived
+    # one -- there's no exact formula for this, unlike breakeven_equity().
+    position_adjustment = -0.02 if is_button else 0.02
 
     if amount_to_call == 0:
-        if equity > 0.55:
+        if equity > 0.55 + position_adjustment:
             return ("raise", pot // 2) if pot > 0 else ("raise", 10)
         else:
             return ("check", 0)
     else:
-        if equity < breakeven_equity(amount_to_call, pot):
+        if equity < breakeven_equity(amount_to_call, pot) + position_adjustment:
             return ("fold", 0)
-        elif equity > breakeven_equity(amount_to_call, pot) + 0.1:
+        elif equity > breakeven_equity(amount_to_call, pot) + 0.1 + position_adjustment:
             raise_increment = pot // 2 if pot > 0 else 10
             return ("raise", amount_to_call + raise_increment)
         else:
@@ -152,6 +142,7 @@ def bot_decide(round_, seat) -> tuple[str, int]:
         return ("check", 0)
     amount_to_call = round_.current_bet_to_match - seat.bet_this_street
     pot = round_.pot
+    is_button = round_.seats[round_.button_index] is seat
     equity = estimate_equity(hole_cards, community_cards, num_opponents, num_trials=1000)
-    return decide_action(equity, amount_to_call, pot)   
+    return decide_action(equity, amount_to_call, pot, is_button)
 
