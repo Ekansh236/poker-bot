@@ -11,6 +11,9 @@ class RoundState(Enum):
     SHOWDOWN = 5
 
 class Round:
+    SMALL_BLIND = 5
+    BIG_BLIND = 10
+
     def __init__(self, seats: list[Seat], deck: Deck):
         self.seats = seats
         self.deck = deck
@@ -23,11 +26,43 @@ class Round:
     def deal_hole_cards(self):
         if RoundState.PRE_FLOP != self.current_round_state:
             raise ValueError("Hole cards can only be dealt during the PRE_FLOP round state.")
+
+        # TODO(human): post blinds before dealing.
+        #
+        # Scoped simplification for this first pass (matches what we agreed
+        # a while back): assume self.seats[0] is always the button/small
+        # blind, and self.seats[1] is always the big blind. Real button
+        # rotation across hands is a later sub-step, not this one.
+        #
+        # 1. self.seats[0].put_in_pot(self.SMALL_BLIND) -- this already
+        #    handles the stack deduction and bet_this_street bookkeeping,
+        #    same as any other bet. Do the same for seats[1] with BIG_BLIND.
+        #
+        # 2. Add both actual amounts (put_in_pot returns what was actually
+        #    taken, which may be less than requested if a stack is short)
+        #    to self.pot -- blinds are real chips in the pot, same as any
+        #    other contribution.
+        #
+        # 3. self.current_bet_to_match needs to reflect the big blind, not
+        #    the old hardcoded 0 a few lines below -- think about why: if
+        #    it's still 0, what would apply_action() let the small blind
+        #    do that shouldn't be legal (check for free, despite having
+        #    only posted half the big blind)?
+        #
+        # 4. self.current_turn_index needs to point at the button/small
+        #    blind for preflop action, not whatever it defaulted to -- this
+        #    is the rule you just reasoned through: button acts FIRST
+        #    preflop in heads-up.
+        small_blind_posted = self.seats[0].put_in_pot(self.SMALL_BLIND)
+        big_blind_posted = self.seats[1].put_in_pot(self.BIG_BLIND)
+        self.pot += small_blind_posted + big_blind_posted
+
         for seat in self.seats:
             seat.cards = (self.deck.deal_card(), self.deck.deal_card())
             seat.has_acted_this_street = False  # Reset action status for the new hand
-        self.current_bet_to_match = 0  # Reset the current bet to match for the new hand
+        self.current_bet_to_match = self.BIG_BLIND  # Reset the current bet to match for the new hand
         self.current_round_state = RoundState.FLOP  # Transition to FLOP state after dealing hole cards
+        self.current_turn_index = 0
 
     def burn_card(self):
         self.deck.deal_card()  # Burn a card (remove the top card from the deck)

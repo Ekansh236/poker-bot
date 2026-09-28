@@ -76,11 +76,12 @@ def test_flop_rejects_wrong_state():
 def test_bet_this_street_resets_between_streets():
     round_, seats = make_round(2)
     round_.deal_hole_cards()
-    round_.apply_action(seats[0], "check")
+    round_.apply_action(seats[0], "call")  # small blind calls up to the big blind
     round_.apply_action(seats[1], "raise", 50)
     round_.apply_action(seats[0], "call")
-    assert seats[1].bet_this_street == 50
+    # seats[1] started with 10 already posted as the big blind, plus the 50 raise.
+    assert seats[1].bet_this_street == 60
     round_.flop_community_cards()
     assert all(seat.bet_this_street == 0 for seat in seats)
     # total_contributed_to_pot must NOT reset mid-hand -- only bet_this_street does.
-    assert seats[1].total_contributed_to_pot == 50
+    assert seats[1].total_contributed_to_pot == 60

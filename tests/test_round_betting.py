@@ -21,9 +21,9 @@ def test_acting_out_of_turn_raises():
 
 
 def test_check_around_completes_betting_round():
-    round_, seats = make_round()
-    for seat in seats:
-        round_.apply_action(seat, "check")
+    round_, seats = make_round(2)
+    round_.apply_action(seats[0], "call")   # small blind calls up to the big blind
+    round_.apply_action(seats[1], "check")  # big blind has the option, checks
     assert round_.is_betting_round_complete()
 
 
@@ -38,9 +38,11 @@ def test_call_matches_current_bet_and_moves_chips():
     round_, seats = make_round(2)
     round_.apply_action(seats[0], "raise", 50)
     round_.apply_action(seats[1], "call")
-    assert seats[1].bet_this_street == 50
-    assert seats[1].stack == 450
-    assert round_.pot == 100
+    # seats[1] started with 10 already posted as the big blind, so calling a
+    # raise to 55 (seats[0]'s 5 posted + 50 raised) means putting in 45 more.
+    assert seats[1].bet_this_street == 55
+    assert seats[1].stack == 445
+    assert round_.pot == 110
 
 
 def test_raise_must_exceed_current_bet_to_match():
@@ -52,7 +54,7 @@ def test_raise_must_exceed_current_bet_to_match():
 
 def test_raise_reopens_action_for_players_who_already_acted():
     round_, seats = make_round(3)
-    round_.apply_action(seats[0], "check")
+    round_.apply_action(seats[0], "call")  # small blind calls up to the big blind
     round_.apply_action(seats[1], "raise", 50)
     assert seats[0].has_acted_this_street is False  # reopened
     assert seats[2].has_acted_this_street is False
