@@ -52,30 +52,6 @@ class Round:
         exactly the gap Seat.reset_for_new_hand() was written for back in
         Milestone 2 but never actually got called anywhere until now.
         """
-        # TODO(human): implement this.
-        #
-        # Needs to reset every per-hand piece of state, both on the seats
-        # and on the Round itself, then deal a fresh hand:
-        #
-        # 1. Call seat.reset_for_new_hand() for every seat in self.seats --
-        #    already written, clears bet_this_street/is_folded/is_all_in/
-        #    total_contributed_to_pot, but deliberately leaves stack alone.
-        #
-        # 2. Reset the Round-level fields that deal_hole_cards() didn't
-        #    already handle for you: community_cards back to [], pot back
-        #    to 0, current_bet_to_match back to 0.
-        #
-        # 3. Build a fresh, shuffled Deck and assign it to self.deck -- the
-        #    old one is nearly exhausted after a full hand (hole cards +
-        #    flop/turn/river + burns), reusing it isn't an option.
-        #
-        # 4. current_round_state needs to go back to RoundState.PRE_FLOP --
-        #    but where in this sequence does that have to happen relative
-        #    to step 5? Check deal_hole_cards()'s very first line again.
-        #
-        # 5. Call self.deal_hole_cards() -- this now also posts blinds and
-        #    sets current_turn_index correctly, so you don't need to
-        #    duplicate any of that here.
         for seat in self.seats:
             seat.reset_for_new_hand()
         self.community_cards = []
@@ -85,6 +61,52 @@ class Round:
         self.current_round_state = RoundState.PRE_FLOP
         self.button_index = self._non_button_index()  # Rotate the button
         self.deal_hole_cards()
+
+    def advance_if_possible(self):
+        """Auto-advance as far as the current state allows.
+
+        Call this after every apply_action(). Loops -- dealing the next
+        street, resolving a fold-win or showdown, or starting a brand new
+        hand -- until it reaches a point where a real player actually has
+        to act again, or nothing more can happen automatically.
+
+        This is the piece that turns "the engine CAN progress a hand" into
+        "the hand actually progresses" -- deal_hole_cards(),
+        flop_community_cards(), showdown_resolution(), start_new_hand(),
+        etc. all already exist and work; nothing has ever chained them
+        together automatically until now.
+        """
+        # TODO(human): implement this.
+        #
+        # The loop condition is self.is_betting_round_complete() -- keep
+        # advancing as long as it's True. Each iteration needs to pick the
+        # right next step:
+        #
+        # 1. Fold-win check FIRST, every iteration: if
+        #    self.check_if_all_but_one_folded(), the hand is over right
+        #    now regardless of what street we're on -- call
+        #    self.showdown_resolution() (it doesn't require any particular
+        #    current_round_state to run), then self.start_new_hand().
+        #
+        # 2. Otherwise, branch on self.current_round_state to call the
+        #    right next method -- remember the state naming is offset by
+        #    one from what you'd expect (current_round_state == FLOP means
+        #    "preflop betting just finished, deal the flop next", not
+        #    "we're currently on the flop"). Check what each of
+        #    flop_community_cards()/turn_community_card()/
+        #    river_community_card()'s own `if` guards require.
+        #
+        # 3. When current_round_state == SHOWDOWN, that's the river betting
+        #    having just completed -- call self.showdown_resolution() then
+        #    self.start_new_hand(), same as the fold-win case.
+        #
+        # Trust the loop to terminate correctly on its own: think about
+        # why is_betting_round_complete() naturally becomes False right
+        # after any of these steps runs (what do flop_community_cards()
+        # and start_new_hand()/deal_hole_cards() both already do to every
+        # seat's has_acted_this_street?) -- that's what stops the loop
+        # once a real player needs to act.
+        pass
 
     def burn_card(self):
         self.deck.deal_card()  # Burn a card (remove the top card from the deck)
