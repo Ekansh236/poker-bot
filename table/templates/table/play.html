@@ -131,6 +131,7 @@
   <button id="btn-check-call" disabled>Check</button>
   <input type="number" id="raise-amount" min="1" placeholder="amount">
   <button id="btn-raise" disabled>Raise</button>
+  <button id="btn-continue" style="display: none;">Continue</button>
 </div>
 
 <div id="log"></div>
@@ -154,6 +155,7 @@ const btnFold = document.getElementById("btn-fold");
 const btnCheckCall = document.getElementById("btn-check-call");
 const btnRaise = document.getElementById("btn-raise");
 const raiseInput = document.getElementById("raise-amount");
+const btnContinue = document.getElementById("btn-continue");
 
 function log(message, isError) {
   logEl.textContent = message;
@@ -181,28 +183,58 @@ function renderCards(container, cards, hiddenCount) {
   cards.forEach((c) => container.appendChild(cardEl(c, false)));
 }
 
-const SHOWDOWN_REVEAL_MS = 3000;
+let awaitingContinue = false;
 
 function renderState(state) {
   latestState = state;
-  // last_showdown is only set when this action just resolved a hand (fold-
-  // win or real showdown) -- an all-in runout deals every remaining street
-  // AND starts the next hand within a single server-side call, so without
-  // this the board/result would never be visible: by the time we render,
-  // Round has already moved on. Show the resolved board + result first,
-  // frozen, then reveal the actual (already-arrived) new-hand state.
+  // last_showdown is only set when THIS broadcast just resolved a hand
+  // (fold-win or real showdown) -- an all-in runout deals every remaining
+  // street AND starts the next hand within a single server-side call, so
+  // without this the board/result would never be visible: by the time we
+  // render, Round has already moved on. Show the resolved board + result
+  // first, frozen (including the opponent's revealed hand on a real
+  // showdown -- never on a fold-win, same as a real table mucking a folded
+  // hand), and wait for the player to click Continue before revealing the
+  // actual (already-arrived) new-hand state.
   if (state.last_showdown) {
-    const sd = state.last_showdown;
-    renderCards(document.getElementById("community-cards"), sd.board);
-    document.getElementById("round-state").textContent = "showdown";
-    document.getElementById("pot").textContent = "Pot: --";
-    const winners = sd.results.filter((r) => r.amount > 0).map((r) => r.player + " +" + r.amount);
-    log(winners.length ? winners.join(", ") : "Hand ended.", false);
-    btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = true;
-    setTimeout(() => renderLiveState(state), SHOWDOWN_REVEAL_MS);
+    showShowdownReveal(state);
+    return;
+  }
+  if (awaitingContinue) {
+    // The bot (or a timeout) may have already acted again on the new hand
+    // in the background -- this broadcast has no last_showdown of its own,
+    // but the player hasn't clicked past the previous reveal yet. Don't
+    // skip it; latestState is already updated above, so Continue will
+    // reveal whatever's actually current once clicked.
     return;
   }
   renderLiveState(state);
+}
+
+function showShowdownReveal(state) {
+  awaitingContinue = true;
+  const sd = state.last_showdown;
+  renderCards(document.getElementById("community-cards"), sd.board);
+  document.getElementById("round-state").textContent = "showdown";
+  document.getElementById("pot").textContent = "Pot: --";
+  const winners = sd.results.filter((r) => r.amount > 0).map((r) => r.player + " +" + r.amount);
+  log(winners.length ? winners.join(", ") : "Hand ended.", false);
+
+  const oppPlayer = state.seats.find((s) => s.player !== PLAYER_ID)?.player;
+  if (oppPlayer && sd.hands[oppPlayer]) {
+    renderCards(document.getElementById("opponent-cards"), sd.hands[oppPlayer]);
+  }
+  if (sd.hands[PLAYER_ID]) {
+    renderCards(document.getElementById("my-cards"), sd.hands[PLAYER_ID]);
+  }
+
+  btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = true;
+  btnContinue.style.display = "inline-block";
+  btnContinue.onclick = () => {
+    awaitingContinue = false;
+    btnContinue.style.display = "none";
+    renderLiveState(latestState);
+  };
 }
 
 function renderLiveState(state) {

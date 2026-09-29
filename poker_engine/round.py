@@ -122,10 +122,21 @@ class Round:
 
     def _resolve_showdown_and_start_new_hand(self):
         board = [card.to_dict() for card in self.community_cards]
+        # A fold-win never reaches a real showdown -- the folded seat's
+        # cards were never shown and shouldn't be revealed here, same as a
+        # real poker table mucking a folded hand. Only include hole cards
+        # when seats genuinely went to showdown against each other.
+        is_real_showdown = not self.check_if_all_but_one_folded()
+        hands = (
+            {seat.player: [card.to_dict() for card in seat.cards] for seat in self.seats if not seat.is_folded}
+            if is_real_showdown
+            else {}
+        )
         results = self.showdown_resolution()
         self.last_showdown = {
             "board": board,
             "results": [{"player": seat.player, "amount": amount} for seat, amount in results],
+            "hands": hands,
         }
         # A broke seat (stack 0) could never post a real blind for another
         # hand -- there's no bankroll/elimination handling beyond this, so
