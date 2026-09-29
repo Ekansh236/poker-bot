@@ -264,10 +264,18 @@ class Round:
                 raise ValueError("Raise amount must be greater than the current bet to match.")
             actual_amount = seat.put_in_pot(amount)
             self.pot += actual_amount
-            self.current_bet_to_match = seat.bet_this_street
-            for other_seat in self.seats:
-                if other_seat != seat:
-                    other_seat.has_acted_this_street = False  # Reset action status for all other seats
+            # put_in_pot() silently caps at the seat's stack -- the validation
+            # above checked the REQUESTED amount, not what actually got put
+            # in. A short all-in "raise" that lands below current_bet_to_match
+            # (e.g. its stack couldn't cover the requested amount) must never
+            # lower the bar for whoever already bet more, and doesn't
+            # genuinely reopen the betting round -- there's nothing new for
+            # them to respond to.
+            if seat.bet_this_street > self.current_bet_to_match:
+                self.current_bet_to_match = seat.bet_this_street
+                for other_seat in self.seats:
+                    if other_seat != seat:
+                        other_seat.has_acted_this_street = False  # Reset action status for all other seats
             if self.advance_turn() == None:  # Move to the next seat after calling
                             self.refund_uncalled_bets()
         elif action == "check":
