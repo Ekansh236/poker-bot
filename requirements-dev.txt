@@ -6,3 +6,4 @@ daphne
 redis
 celery
 structlog
+flower

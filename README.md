@@ -11,12 +11,13 @@ by hand; framework boilerplate and infra glue are the only parts scaffolded dire
 
 | Milestone | Status |
 |---|---|
-| 1. Data modeling | Complete |
-| 2. Pure Python Texas Hold'em engine | Complete — 57 passing tests |
+| 1. Data modeling | Complete (conceptual — no DB models yet, see Known gaps) |
+| 2. Pure Python Texas Hold'em engine | Complete — 59 passing tests |
 | 3. Real-time WebSockets + Redis game state | Complete — verified live with real WebSocket connections |
-| 4. Autonomous bot engine (Monte Carlo + pot odds) | In progress |
-| 4.5. Blinds, button rotation, real position (planned) | Not started |
-| 5-9. Celery, Stripe, AI coach, React frontend, Docker/CI | Not started |
+| 4. Autonomous bot engine (Monte Carlo + pot odds + real Celery dispatch) | Complete |
+| 4.5. Blinds, button rotation, position-aware bot decisions, live auto-advancement | Complete |
+| 5. Celery Beat turn-timeouts, structlog, Flower monitoring | In progress |
+| 6-9. Stripe, AI coach, React frontend, Docker/CI | Not started |
 
 ## Architecture
 
@@ -24,28 +25,40 @@ by hand; framework boilerplate and infra glue are the only parts scaffolded dire
 Client (WebSocket)
       │  ws://.../ws/table/<table_id>/<player_id>/
       ▼
-config/asgi.py  ──►  table/routing.py  ──►  table/consumers.py (TableConsumer)
-                                                   │
-                                    ┌──────────────┼──────────────┐
-                                    ▼                              ▼
-                          table/registry.py                table/serializers.py
-                          (Redis-backed locked_round)       (Round → JSON-safe dict)
-                                    │
-                                    ▼
-                            poker_engine/round.py
-                          (pure Python game engine)
+config/asgi.py ──► table/routing.py ──► table/consumers.py (TableConsumer)
+                                               │
+                                ┌──────────────┼──────────────┐
+                                ▼                              ▼
+                      table/registry.py                table/serializers.py
+                      (Redis-backed locked_round)       (Round → JSON-safe dict)
+                                │
+                                ▼
+                        poker_engine/round.py
+                      (pure Python game engine)
+
+                                │  bot_decide_task.delay() / Celery Beat tick
+                                ▼
+                        table/tasks.py (Celery worker, separate process)
+                          ├─ bot_decide_task      -- Monte Carlo bot decision
+                          └─ check_turn_timeouts  -- periodic auto-fold on inactivity
+                                │
+                                ▼
+                        Flower (celery -A config flower) -- queue/task monitoring
 ```
 
 - **`poker_engine/`** — framework-agnostic Texas Hold'em domain engine: cards, hand evaluation,
-  betting rounds, side pots, showdown resolution, and (in progress) the autonomous bot's Monte
-  Carlo equity simulator and pot-odds decision logic. No Django/Channels dependency — this is
-  intentional, so the same engine can sit behind a WebSocket, a REST API, or a bot without
-  modification.
+  betting rounds, blinds, button rotation, side pots, showdown resolution, hand orchestration
+  (`Round.apply_action_and_advance()`), and the autonomous bot's Monte Carlo equity simulator and
+  position-aware pot-odds decision logic. No Django/Channels dependency — this is intentional, so
+  the same engine can sit behind a WebSocket, a REST API, or a bot without modification.
 - **`table/`** — the Django Channels real-time layer. `TableConsumer` handles WebSocket
   connections; `registry.py` stores live game state in Redis behind a distributed lock
   (`locked_round()`), preventing the classic multi-worker "lost update" race condition where two
   server processes both read stale state and one silently overwrites the other's write.
-- **`config/`** — Django project settings, ASGI routing, Redis-backed channel layer config.
+  `tasks.py` holds the Celery tasks that run on a separate worker process: dispatching bot
+  decisions and periodically auto-folding players who've gone idle.
+- **`config/`** — Django project settings, ASGI routing, Redis-backed channel layer config, Celery
+  app + Beat schedule, structlog configuration.
 
 ## Notable engineering details
 
@@ -60,11 +73,20 @@ config/asgi.py  ──►  table/routing.py  ──►  table/consumers.py (Tabl
   simulates thousands of random deck completions and reuses the Milestone 2 hand evaluator to
   estimate win probability — built from a fresh, full 52-card deck each time rather than a live
   `Round`'s `Deck`, so the bot can never "see" which cards opponents are holding.
+- **A single choke point for every state mutation.** `Round.apply_action_and_advance()` pairs
+  `apply_action()` with `advance_if_possible()` so every caller (the WebSocket consumer, the bot
+  task, the turn-timeout task) automatically cascades through street transitions, fold-wins, and
+  new-hand dealing — impossible to forget, unlike calling the two separately.
+- **Pickle's schema-evolution trap.** Game state is `pickle`d into Redis, which restores an
+  object's saved `__dict__` directly rather than re-running `__init__()`. Adding a new field to
+  `Round` (e.g. `time_started`) means every *already-persisted* Round silently lacks it —
+  `check_turn_timeouts()` guards against this with `getattr(round_, "time_started", 0)` rather
+  than crashing the periodic sweep over one stale table.
 
 ## Tech stack
 
-Python · Django · Django Channels · Redis · PostgreSQL (planned) · Celery (planned) ·
-React/TypeScript (planned) · pytest
+Python · Django · Django Channels · Redis · Celery + Celery Beat · Flower · structlog ·
+PostgreSQL (planned) · React/TypeScript (planned) · pytest
 
 ## Running it locally
 
@@ -80,14 +102,31 @@ pytest
 
 # Run the dev server (WebSocket-capable, via daphne)
 python manage.py runserver
+
+# Run a Celery worker (bot decisions + turn-timeout auto-folds) -- separate
+# terminal. --pool=solo works around a macOS-specific prefork-pool crash,
+# unrelated to application code.
+celery -A config worker --pool=solo --loglevel=info
+
+# Run Celery Beat (fires check_turn_timeouts every 5s) -- separate terminal
+celery -A config beat --loglevel=info
+
+# Run Flower (queue/task monitoring dashboard) -- separate terminal
+celery -A config flower --port=5555
 ```
 
 WebSocket tables are reachable at `ws://localhost:8000/ws/table/<table_id>/<player_id>/`.
+Flower's dashboard is at `http://localhost:5555`.
 
 ## Known gaps (tracked, not hidden)
 
-- No blind posting, dealer-button rotation, or cross-hand chip persistence yet — every `Round` is
-  fully independent, and stacks reset to the default each hand. Planned as Milestone 4.5.
-- `poker_engine/bot.py`'s raise-sizing logic has a known bug: the raise amount is currently
-  computed independently of `amount_to_call`, so it can be smaller than what's needed to even
-  call a large bet. See the file for details.
+- A brand-new table's very first hand still requires something to call
+  `Round.deal_hole_cards()` directly — nothing auto-deals the first hand of a fresh table.
+  Every hand after that auto-advances correctly via `apply_action_and_advance()`.
+- No real database yet — `table/models.py` is empty and `settings.py` still points at the default
+  SQLite file. Milestone 1 was conceptual/architectural, not actual Django models. Needed before
+  Milestone 6 (Stripe/VIP tiers) or any real user accounts.
+- No bankroll/elimination handling — a player who goes broke still gets dealt into the next hand
+  and posts a `0` blind rather than being removed from the table.
+- `poker_engine/starting_hands.py`'s 169-hand preflop strength chart is built but not wired into
+  `decide_action()` — the bot currently decides preflop raises purely from Monte Carlo equity.
