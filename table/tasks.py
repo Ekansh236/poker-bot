@@ -32,6 +32,15 @@ def bot_decide_task(table_id: str, player_id: str) -> None:
             {"type": "table_message", "message": serialize_round(round_)}
         )
 
+        # A bot's own action can leave it still on the clock -- e.g. the big
+        # blind checking to close preflop betting immediately becomes their
+        # own turn again postflop, since the non-button acts first on every
+        # street after preflop. Nothing else re-dispatches this task in that
+        # case: consumers.receive() only fires on a real player's message.
+        next_seat = round_.seats[round_.current_turn_index]
+        if next_seat.is_bot:
+            bot_decide_task.delay(table_id, next_seat.player)
+
 
 @shared_task
 def check_turn_timeouts() -> None:
@@ -57,3 +66,10 @@ def check_turn_timeouts() -> None:
                     f'table_{table_id}',
                     {"type": "table_message", "message": serialize_round(round_)}
                 )
+
+                # Same gap as bot_decide_task: a fold-driven advance (new
+                # street, or a whole new hand after a fold-win) can land
+                # squarely on a bot's turn with nothing else to dispatch it.
+                next_seat = round_.seats[round_.current_turn_index]
+                if next_seat.is_bot:
+                    bot_decide_task.delay(table_id, next_seat.player)
