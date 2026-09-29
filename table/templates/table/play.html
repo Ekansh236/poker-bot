@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Poker -- {{ table_id }}</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0b3d24;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  h1 { font-size: 16px; font-weight: 500; opacity: 0.8; margin: 0 0 4px; }
+  #status { font-size: 12px; opacity: 0.6; margin-bottom: 16px; }
+  #status.connected { color: #6fdc8c; }
+  #status.disconnected { color: #e06c6c; }
+
+  .table {
+    width: 100%;
+    max-width: 520px;
+    background: #0f5132;
+    border: 6px solid #6b4423;
+    border-radius: 220px / 90px;
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .seat { text-align: center; }
+  .seat .label { font-size: 13px; opacity: 0.75; }
+  .seat .label.turn { color: #ffd54a; font-weight: 600; opacity: 1; }
+  .seat .stack { font-size: 15px; margin-top: 2px; }
+  .seat .status { font-size: 12px; color: #e0a86c; min-height: 14px; }
+
+  .cards { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
+  .card {
+    width: 38px; height: 54px;
+    background: #fdfdfd;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  }
+  .card.red { color: #c0392b; }
+  .card.black { color: #222; }
+  .card.hidden { background: #2a2a2a; color: transparent; }
+
+  .board { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .pot { font-size: 14px; opacity: 0.85; }
+  .round-state { font-size: 11px; letter-spacing: 1px; opacity: 0.6; text-transform: uppercase; }
+
+  .actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  button {
+    background: #1a5c37;
+    color: #eee;
+    border: 1px solid #2f8a54;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.35; cursor: default; }
+  button:not(:disabled):hover { background: #237046; }
+  button.fold { border-color: #a04040; }
+  input[type=number] {
+    width: 80px;
+    padding: 9px 8px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: #1c1c1c;
+    color: #eee;
+  }
+
+  #log {
+    max-width: 520px;
+    width: 100%;
+    margin-top: 16px;
+    font-size: 12px;
+    opacity: 0.6;
+    text-align: center;
+    min-height: 16px;
+  }
+  #log.error { color: #e06c6c; opacity: 1; }
+</style>
+</head>
+<body>
+
+<h1>Table "{{ table_id }}" -- playing as {{ player_id }}</h1>
+<div id="status" class="disconnected">connecting…</div>
+
+<div class="table">
+  <div class="seat" id="opponent-seat">
+    <div class="label" id="opponent-label">opponent</div>
+    <div class="cards" id="opponent-cards"></div>
+    <div class="stack" id="opponent-stack">--</div>
+    <div class="status" id="opponent-status"></div>
+  </div>
+
+  <div class="board">
+    <div class="round-state" id="round-state">--</div>
+    <div class="cards" id="community-cards"></div>
+    <div class="pot" id="pot">Pot: --</div>
+  </div>
+
+  <div class="seat" id="my-seat">
+    <div class="status" id="my-status"></div>
+    <div class="stack" id="my-stack">--</div>
+    <div class="cards" id="my-cards"></div>
+    <div class="label" id="my-label">you</div>
+  </div>
+</div>
+
+<div class="actions">
+  <button class="fold" id="btn-fold" disabled>Fold</button>
+  <button id="btn-check-call" disabled>Check</button>
+  <input type="number" id="raise-amount" min="1" placeholder="amount">
+  <button id="btn-raise" disabled>Raise</button>
+</div>
+
+<div id="log"></div>
+
+<script>
+const TABLE_ID = "{{ table_id|escapejs }}";
+const PLAYER_ID = "{{ player_id|escapejs }}";
+const SUIT_SYMBOL = { Hearts: "♥", Diamonds: "♦", Clubs: "♣", Spades: "♠" };
+const RED_SUITS = new Set(["Hearts", "Diamonds"]);
+const RANK_LABEL = {
+  TWO: "2", THREE: "3", FOUR: "4", FIVE: "5", SIX: "6", SEVEN: "7", EIGHT: "8",
+  NINE: "9", TEN: "10", JACK: "J", QUEEN: "Q", KING: "K", ACE: "A",
+};
+
+let myHand = [];
+let latestState = null;
+
+const statusEl = document.getElementById("status");
+const logEl = document.getElementById("log");
+const btnFold = document.getElementById("btn-fold");
+const btnCheckCall = document.getElementById("btn-check-call");
+const btnRaise = document.getElementById("btn-raise");
+const raiseInput = document.getElementById("raise-amount");
+
+function log(message, isError) {
+  logEl.textContent = message;
+  logEl.className = isError ? "error" : "";
+}
+
+function cardEl(card, hidden) {
+  const el = document.createElement("div");
+  if (hidden) {
+    el.className = "card hidden";
+    el.textContent = "??";
+    return el;
+  }
+  el.className = "card " + (RED_SUITS.has(card.suit) ? "red" : "black");
+  el.textContent = RANK_LABEL[card.rank] + SUIT_SYMBOL[card.suit];
+  return el;
+}
+
+function renderCards(container, cards, hiddenCount) {
+  container.innerHTML = "";
+  if (hiddenCount) {
+    for (let i = 0; i < hiddenCount; i++) container.appendChild(cardEl(null, true));
+    return;
+  }
+  cards.forEach((c) => container.appendChild(cardEl(c, false)));
+}
+
+function renderState(state) {
+  latestState = state;
+  const mySeat = state.seats.find((s) => s.player === PLAYER_ID);
+  const oppSeat = state.seats.find((s) => s.player !== PLAYER_ID);
+  const myTurn = state.current_turn === PLAYER_ID;
+
+  document.getElementById("round-state").textContent = state.round_state.replace("_", " ");
+  document.getElementById("pot").textContent = "Pot: " + state.pot;
+  renderCards(document.getElementById("community-cards"), state.community_cards);
+
+  if (oppSeat) {
+    document.getElementById("opponent-label").textContent = oppSeat.player + (oppSeat.is_bot ? " (bot)" : "");
+    document.getElementById("opponent-label").className = "label" + (state.current_turn === oppSeat.player ? " turn" : "");
+    document.getElementById("opponent-stack").textContent = "Stack: " + oppSeat.stack;
+    document.getElementById("opponent-status").textContent = oppSeat.is_folded ? "Folded" : (oppSeat.is_all_in ? "All in" : (oppSeat.bet_this_street ? "Bet: " + oppSeat.bet_this_street : ""));
+    // Opponent's hole cards are never sent to us -- always render face-down
+    // if they still have a hand in this street (i.e. haven't folded).
+    renderCards(document.getElementById("opponent-cards"), [], oppSeat.is_folded ? 0 : 2);
+  }
+
+  if (mySeat) {
+    document.getElementById("my-label").className = "label" + (myTurn ? " turn" : "");
+    document.getElementById("my-stack").textContent = "Stack: " + mySeat.stack;
+    document.getElementById("my-status").textContent = mySeat.is_folded ? "Folded" : (mySeat.is_all_in ? "All in" : (mySeat.bet_this_street ? "Bet: " + mySeat.bet_this_street : ""));
+    renderCards(document.getElementById("my-cards"), myHand);
+
+    const amountToCall = state.current_bet_to_match - mySeat.bet_this_street;
+    const canAct = myTurn && !mySeat.is_folded && !mySeat.is_all_in;
+    btnFold.disabled = !canAct;
+    btnCheckCall.disabled = !canAct;
+    btnRaise.disabled = !canAct;
+    btnCheckCall.textContent = amountToCall > 0 ? "Call " + amountToCall : "Check";
+    raiseInput.placeholder = "raise to " + (state.current_bet_to_match + 10);
+  }
+}
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(proto + "://" + location.host + "/ws/table/" + TABLE_ID + "/" + PLAYER_ID + "/");
+
+  ws.onopen = () => {
+    statusEl.textContent = "connected";
+    statusEl.className = "connected";
+    ws.send(JSON.stringify({ type: "get_hand" }));
+  };
+
+  ws.onclose = () => {
+    statusEl.textContent = "disconnected -- reconnecting…";
+    statusEl.className = "disconnected";
+    setTimeout(connect, 2000);
+  };
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === "hole_cards") {
+      myHand = msg.cards;
+      if (latestState) renderState(latestState);
+      return;
+    }
+    if (msg.error) {
+      log(msg.error, true);
+      return;
+    }
+    log("");
+    renderState(msg);
+    // Cards may have changed (new hand dealt) regardless of who caused
+    // this update -- always refresh our own hand after any state change.
+    ws.send(JSON.stringify({ type: "get_hand" }));
+  };
+
+  window.currentSocket = ws;
+}
+
+btnFold.addEventListener("click", () => window.currentSocket.send(JSON.stringify({ action: "fold" })));
+btnCheckCall.addEventListener("click", () => {
+  const amountToCall = latestState.current_bet_to_match - latestState.seats.find((s) => s.player === PLAYER_ID).bet_this_street;
+  window.currentSocket.send(JSON.stringify({ action: amountToCall > 0 ? "call" : "check" }));
+});
+btnRaise.addEventListener("click", () => {
+  const raiseTo = parseInt(raiseInput.value, 10);
+  if (!raiseTo || raiseTo <= 0) { log("Enter a raise-to amount first.", true); return; }
+  const mySeat = latestState.seats.find((s) => s.player === PLAYER_ID);
+  // apply_action()'s "raise" expects the NEW chips added this action, not
+  // an absolute total -- convert the "raise to" total the input asks for.
+  const amount = raiseTo - mySeat.bet_this_street;
+  window.currentSocket.send(JSON.stringify({ action: "raise", amount: amount }));
+  raiseInput.value = "";
+});
+
+connect();
+</script>
+</body>
+</html>

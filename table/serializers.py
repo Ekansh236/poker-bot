@@ -1,4 +1,14 @@
 from poker_engine.round import Round
+from poker_engine.seat import Seat
+
+
+def serialize_hand(seat: Seat) -> list[dict]:
+    """A single seat's own hole cards -- never part of the shared broadcast.
+
+    Delivered separately, straight to that seat's own WebSocket connection,
+    so no other client ever receives it.
+    """
+    return [card.to_dict() for card in seat.cards] if seat.cards else []
 
 
 def serialize_round(round_: Round) -> dict:

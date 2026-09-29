@@ -4,7 +4,7 @@ import structlog
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from table import registry
-from table.serializers import serialize_round
+from table.serializers import serialize_hand, serialize_round
 from table.tasks import bot_decide_task
 
 log = structlog.get_logger(__name__)
@@ -23,8 +23,24 @@ class TableConsumer(AsyncWebsocketConsumer):
             registry.claim_seat(round_, self.player_id)
             registry.seat_bot_if_needed(round_)
 
+            # A brand-new table has no hand in progress yet -- nothing
+            # auto-deals the very first hand (see README's Known gaps).
+            # Once every seat is filled and no one has cards, deal one now
+            # so a freshly opened table is immediately playable.
+            if all(seat.player is not None for seat in round_.seats) and all(
+                seat.cards is None for seat in round_.seats
+            ):
+                round_.deal_hole_cards()
+
+            state_payload = serialize_round(round_)
+
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
+        # Push current state straight to this connection -- nothing else
+        # broadcasts until someone acts, and this client needs to see the
+        # table (including a hand it may have just caused to be dealt)
+        # immediately, not wait for the next action anywhere at the table.
+        await self.send(text_data=json.dumps(state_payload))
         log.info("player_connected", table_id=self.table_id, player_id=self.player_id)
 
     async def disconnect(self, close_code):
@@ -33,6 +49,19 @@ class TableConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         data = json.loads(text_data)
+
+        if data.get("type") == "get_hand":
+            # Hole cards are never part of the shared broadcast (see
+            # serialize_round) -- a client asks for its own hand explicitly,
+            # any time its view of the table might be stale (after any
+            # action from anyone, including the bot or a timeout auto-fold,
+            # since a new hand may have just been dealt).
+            with registry.locked_round(self.table_id) as round_:
+                seat = registry.claim_seat(round_, self.player_id)
+                hand_payload = serialize_hand(seat)
+            await self.send(text_data=json.dumps({"type": "hole_cards", "cards": hand_payload}))
+            return
+
         action = data.get("action")
         amount = data.get("amount")
 
