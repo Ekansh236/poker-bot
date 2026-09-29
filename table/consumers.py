@@ -1,10 +1,13 @@
 import json
 
+import structlog
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from table import registry
 from table.serializers import serialize_round
 from table.tasks import bot_decide_task
+
+log = structlog.get_logger(__name__)
 
 
 class TableConsumer(AsyncWebsocketConsumer):
@@ -22,9 +25,11 @@ class TableConsumer(AsyncWebsocketConsumer):
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
+        log.info("player_connected", table_id=self.table_id, player_id=self.player_id)
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        log.info("player_disconnected", table_id=self.table_id, player_id=self.player_id, close_code=close_code)
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -36,8 +41,20 @@ class TableConsumer(AsyncWebsocketConsumer):
             try:
                 round_.apply_action_and_advance(seat, action, amount)
             except ValueError as e:
+                log.warning(
+                    "action_rejected",
+                    table_id=self.table_id, player_id=self.player_id,
+                    action=action, amount=amount, reason=str(e),
+                )
                 await self.send(text_data=json.dumps({"error": str(e)}))
                 return
+
+            log.info(
+                "action_applied",
+                table_id=self.table_id, player_id=self.player_id,
+                action=action, amount=amount,
+                round_state=round_.current_round_state.name, pot=round_.pot,
+            )
 
             # Broadcast the updated round state to all players at the table.
             broadcast_payload = serialize_round(round_)

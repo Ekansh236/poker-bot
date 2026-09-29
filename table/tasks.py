@@ -1,11 +1,15 @@
+import time
+
+import structlog
 from asgiref.sync import async_to_sync
 from celery import shared_task
 from channels.layers import get_channel_layer
-import time
 
 from poker_engine.bot import bot_decide
 from table import registry
 from table.serializers import serialize_round
+
+log = structlog.get_logger(__name__)
 
 
 @shared_task
@@ -21,6 +25,7 @@ def bot_decide_task(table_id: str, player_id: str) -> None:
         bot_seat = registry.claim_seat(round_, player_id=player_id)
         action, amount = bot_decide(round_=round_, seat=bot_seat)
         round_.apply_action_and_advance(seat=bot_seat, action=action, amount=amount)
+        log.info("bot_action_applied", table_id=table_id, player_id=player_id, action=action, amount=amount)
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f'table_{table_id}',
@@ -44,7 +49,9 @@ def check_turn_timeouts() -> None:
             # periodic tick for every other table.
             time_started = getattr(round_, "time_started", 0)
             if time.time() - time_started > 30:
+                timed_out_player = round_.seats[round_.current_turn_index].player
                 round_.apply_action_and_advance(seat=round_.seats[round_.current_turn_index], action="fold", amount=0)
+                log.info("turn_timed_out", table_id=table_id, player_id=timed_out_player)
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
                     f'table_{table_id}',
