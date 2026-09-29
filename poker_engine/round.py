@@ -38,6 +38,9 @@ class Round:
         # game simply ends rather than trying to deal a broke player into
         # another hand (which they could never post a real blind for).
         self.game_over = False
+        # Whoever most recently acted -- see apply_action() for the shape.
+        # None until the first action of the game.
+        self.last_action = None
 
     def _non_button_index(self):
         """The seat across from the button -- big blind, in heads-up."""
@@ -96,6 +99,7 @@ class Round:
         self.button_index = 0
         self.game_over = False
         self.last_showdown = None
+        self.last_action = None
         self.time_started = 0
         self.deal_hole_cards()
 
@@ -287,6 +291,16 @@ class Round:
                     self.refund_uncalled_bets()
         else:
             raise ValueError("Invalid action. Must be 'fold', 'call', or 'raise'.")
+
+        # Whoever just acted -- persists across broadcasts (not a one-shot
+        # event like last_showdown) so a client can show an ongoing "what
+        # did the other seat just do" log, not just flash it once.
+        self.last_action = {
+            "player": seat.player,
+            "action": action,
+            "bet_this_street": seat.bet_this_street,
+            "is_all_in": seat.is_all_in,
+        }
 
     def is_betting_round_complete(self):
         # A betting round is complete if all active seats have acted and either:

@@ -40,6 +40,7 @@
   .seat .label.turn { color: #ffd54a; font-weight: 600; opacity: 1; }
   .seat .stack { font-size: 15px; margin-top: 2px; }
   .seat .status { font-size: 12px; color: #e0a86c; min-height: 14px; }
+  .seat .last-action { font-size: 12px; color: #8fc9e8; min-height: 14px; font-style: italic; }
 
   .cards { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
   .card {
@@ -110,6 +111,7 @@
     <div class="cards" id="opponent-cards"></div>
     <div class="stack" id="opponent-stack">--</div>
     <div class="status" id="opponent-status"></div>
+    <div class="last-action" id="opponent-last-action"></div>
   </div>
 
   <div class="board">
@@ -186,6 +188,17 @@ function renderCards(container, cards, hiddenCount) {
     return;
   }
   cards.forEach((c) => container.appendChild(cardEl(c, false)));
+}
+
+function describeAction(lastAction) {
+  const suffix = lastAction.is_all_in ? " (all in)" : "";
+  switch (lastAction.action) {
+    case "fold": return "Folded";
+    case "check": return "Checked";
+    case "call": return "Called" + suffix;
+    case "raise": return "Raised to " + lastAction.bet_this_street + suffix;
+    default: return "";
+  }
 }
 
 let awaitingContinue = false;
@@ -268,6 +281,11 @@ function renderLiveState(state) {
     // Opponent's hole cards are never sent to us -- always render face-down
     // if they still have a hand in this street (i.e. haven't folded).
     renderCards(document.getElementById("opponent-cards"), [], oppSeat.is_folded ? 0 : 2);
+
+    const lastActionEl = document.getElementById("opponent-last-action");
+    lastActionEl.textContent = (state.last_action && state.last_action.player === oppSeat.player)
+      ? describeAction(state.last_action)
+      : "";
   }
 
   if (mySeat) {

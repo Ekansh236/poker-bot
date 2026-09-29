@@ -27,6 +27,7 @@ def serialize_round(round_: Round) -> dict:
         # time this is serialized. None the rest of the time.
         "last_showdown": round_.last_showdown,
         "game_over": round_.game_over,
+        "last_action": round_.last_action,
         "seats": [
             {
                 "player": seat.player,
