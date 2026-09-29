@@ -16,8 +16,11 @@ by hand; framework boilerplate and infra glue are the only parts scaffolded dire
 | 3. Real-time WebSockets + Redis game state | Complete — verified live with real WebSocket connections |
 | 4. Autonomous bot engine (Monte Carlo + pot odds + real Celery dispatch) | Complete |
 | 4.5. Blinds, button rotation, position-aware bot decisions, live auto-advancement | Complete |
-| 5. Celery Beat turn-timeouts, structlog, Flower monitoring | In progress |
+| 5. Celery Beat turn-timeouts, structlog, Flower monitoring | Complete |
 | 6-9. Stripe, AI coach, React frontend, Docker/CI | Not started |
+
+Also built ahead of schedule: a minimal local play UI (`table/templates/table/play.html`) to actually
+play a full game against the bot in a browser, independent of the real Milestone 8 React frontend.
 
 ## Architecture
 
@@ -115,18 +118,21 @@ celery -A config beat --loglevel=info
 celery -A config flower --port=5555
 ```
 
-WebSocket tables are reachable at `ws://localhost:8000/ws/table/<table_id>/<player_id>/`.
+WebSocket tables are reachable directly at `ws://localhost:8000/ws/table/<table_id>/<player_id>/`,
+or play a full game in a browser at `http://localhost:8000/play/<table_id>/<player_id>/` (e.g.
+`http://localhost:8000/play/table1/alice/`) — `table_id`/`player_id` are arbitrary names you choose.
+Only Redis, `runserver`, and a Celery worker are required to actually play; Beat and Flower are
+optional extras (Beat enables the 30s inactivity auto-fold, Flower is just a monitoring dashboard).
 Flower's dashboard is at `http://localhost:5555`.
 
 ## Known gaps (tracked, not hidden)
 
-- A brand-new table's very first hand still requires something to call
-  `Round.deal_hole_cards()` directly — nothing auto-deals the first hand of a fresh table.
-  Every hand after that auto-advances correctly via `apply_action_and_advance()`.
 - No real database yet — `table/models.py` is empty and `settings.py` still points at the default
   SQLite file. Milestone 1 was conceptual/architectural, not actual Django models. Needed before
   Milestone 6 (Stripe/VIP tiers) or any real user accounts.
-- No bankroll/elimination handling — a player who goes broke still gets dealt into the next hand
-  and posts a `0` blind rather than being removed from the table.
 - `poker_engine/starting_hands.py`'s 169-hand preflop strength chart is built but not wired into
   `decide_action()` — the bot currently decides preflop raises purely from Monte Carlo equity.
+- Bankroll/elimination is minimal — `Round.game_over` correctly ends a heads-up game once a seat
+  hits 0 chips (no infinite loop dealing a broke player into hands they can't fund), but there's
+  no multi-table bankroll persistence beyond that; the play UI's Restart button is the only way
+  back to a fresh 500/500 game.
