@@ -33,6 +33,11 @@ class Round:
         # be visible anywhere -- by the time the caller broadcasts, Round has
         # already moved on to a brand new hand.
         self.last_showdown = None
+        # Set once a hand resolves with some seat's stack at 0 -- no
+        # bankroll/elimination handling exists beyond this, so heads-up the
+        # game simply ends rather than trying to deal a broke player into
+        # another hand (which they could never post a real blind for).
+        self.game_over = False
 
     def _non_button_index(self):
         """The seat across from the button -- big blind, in heads-up."""
@@ -103,7 +108,7 @@ class Round:
         etc. all already exist and work; nothing has ever chained them
         together automatically until now.
         """
-        while self.is_betting_round_complete():
+        while self.is_betting_round_complete() and not self.game_over:
             if self.check_if_all_but_one_folded():
                 self._resolve_showdown_and_start_new_hand()
             elif self.current_round_state == RoundState.FLOP:
@@ -122,7 +127,21 @@ class Round:
             "board": board,
             "results": [{"player": seat.player, "amount": amount} for seat, amount in results],
         }
-        self.start_new_hand()
+        # A broke seat (stack 0) could never post a real blind for another
+        # hand -- there's no bankroll/elimination handling beyond this, so
+        # heads-up the game just ends here rather than cycling do-nothing
+        # hands forever (a 0-stack seat is permanently "all-in" with nothing
+        # contributed, which would otherwise make every future hand's very
+        # first blind-post look like a complete, unopposed betting round).
+        if any(seat.stack <= 0 for seat in self.seats):
+            self.game_over = True
+            # start_new_hand() normally resets pot to 0 as a side effect of
+            # dealing the next hand -- skipped here, but showdown_resolution()
+            # already moved every chip into the winner's stack, so the stale
+            # pot figure must still be cleared or stack+pot double-counts it.
+            self.pot = 0
+        else:
+            self.start_new_hand()
 
     def burn_card(self):
         self.deck.deal_card()  # Burn a card (remove the top card from the deck)
@@ -191,6 +210,8 @@ class Round:
         return None  # everyone else is folded or all-in -- no one left to act
 
     def apply_action(self, seat: Seat, action: str, amount: int = 0):
+        if self.game_over:
+            raise ValueError("The game is over -- one seat is out of chips.")
         if seat != self.seats[self.current_turn_index]:
             raise ValueError("It's not this seat's turn to act.")
         if action == "fold":
@@ -233,7 +254,23 @@ class Round:
         active_seats = [seat for seat in self.seats if not seat.is_folded]
         if len(active_seats) <= 1:
             return True
-        return all((seat.has_acted_this_street or seat.is_all_in) and seat.bet_this_street == self.current_bet_to_match for seat in active_seats)
+
+        # A short all-in (fewer chips than current_bet_to_match) can never
+        # satisfy an exact bet-match -- it's the seat's whole stack, that's
+        # already the most they can ever contribute. Once at most one seat
+        # can still voluntarily act (everyone else folded or all-in), no one
+        # is left to bet against, so has_acted_this_street stops mattering
+        # too: it gets reset to False by every later street's dealing (e.g.
+        # flop_community_cards()) even though there's no new decision left
+        # to make, which would otherwise stall the runout after just one
+        # street. Matching current_bet_to_match is still required, since
+        # that's what distinguishes "already caught up" from "still owes a
+        # call against a fresh raise they haven't responded to yet".
+        seats_that_can_still_act = [seat for seat in active_seats if not seat.is_all_in]
+        if len(seats_that_can_still_act) <= 1:
+            return all(seat.bet_this_street == self.current_bet_to_match for seat in seats_that_can_still_act)
+
+        return all(seat.has_acted_this_street and seat.bet_this_street == self.current_bet_to_match for seat in seats_that_can_still_act)
 
     def compute_pots(self):
         levels = sorted(set(seat.total_contributed_to_pot for seat in self.seats if seat.total_contributed_to_pot > 0))

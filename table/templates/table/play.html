@@ -210,6 +210,15 @@ function renderLiveState(state) {
   const oppSeat = state.seats.find((s) => s.player !== PLAYER_ID);
   const myTurn = state.current_turn === PLAYER_ID;
 
+  if (state.game_over) {
+    const broke = state.seats.find((s) => s.stack <= 0);
+    const winner = state.seats.find((s) => s.stack > 0);
+    document.getElementById("round-state").textContent = "game over";
+    log(winner ? `${winner.player} wins -- ${broke.player} is out of chips.` : "Game over.", false);
+    btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = true;
+    return;
+  }
+
   document.getElementById("round-state").textContent = state.round_state.replace("_", " ");
   document.getElementById("pot").textContent = "Pot: " + state.pot;
   renderCards(document.getElementById("community-cards"), state.community_cards);

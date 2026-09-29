@@ -26,6 +26,7 @@ def serialize_round(round_: Round) -> dict:
         # anywhere, since Round has already moved on to the next hand by the
         # time this is serialized. None the rest of the time.
         "last_showdown": round_.last_showdown,
+        "game_over": round_.game_over,
         "seats": [
             {
                 "player": seat.player,
