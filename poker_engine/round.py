@@ -77,6 +77,28 @@ class Round:
         self.button_index = self._non_button_index()  # Rotate the button
         self.deal_hole_cards()
 
+    def restart(self, starting_stack: int = 500):
+        """Reset every seat's stack and deal a brand new game from scratch.
+
+        Unlike start_new_hand() (which preserves stacks across hands within
+        one game), this exists for the play UI's Restart button -- wipe
+        everything, including a game_over from a prior bust-out, and start
+        over exactly like a freshly created table.
+        """
+        for seat in self.seats:
+            seat.stack = starting_stack
+            seat.reset_for_new_hand()
+        self.community_cards = []
+        self.pot = 0
+        self.deck = Deck()
+        self.deck.shuffle()
+        self.current_round_state = RoundState.PRE_FLOP
+        self.button_index = 0
+        self.game_over = False
+        self.last_showdown = None
+        self.time_started = 0
+        self.deal_hole_cards()
+
     def apply_action_and_advance(self, seat: Seat, action: str, amount: int = 0):
         """apply_action() followed by advance_if_possible(), as one call.
 

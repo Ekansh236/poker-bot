@@ -62,6 +62,24 @@ class TableConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({"type": "hole_cards", "cards": hand_payload}))
             return
 
+        if data.get("type") == "restart":
+            # A dedicated path, not apply_action_and_advance() -- restart
+            # needs to work even after game_over, which apply_action()
+            # deliberately refuses to process as a normal turn-based action.
+            with registry.locked_round(self.table_id) as round_:
+                registry.claim_seat(round_, self.player_id)
+                registry.seat_bot_if_needed(round_)
+                round_.restart()
+                log.info("table_restarted", table_id=self.table_id, player_id=self.player_id)
+                broadcast_payload = serialize_round(round_)
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {"type": "table.message", "message": broadcast_payload},
+                )
+                if round_.seats[round_.current_turn_index].is_bot:
+                    bot_decide_task.delay(self.table_id, round_.seats[round_.current_turn_index].player)
+            return
+
         action = data.get("action")
         amount = data.get("amount")
 

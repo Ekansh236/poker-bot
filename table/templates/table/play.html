@@ -134,6 +134,10 @@
   <button id="btn-continue" style="display: none;">Continue</button>
 </div>
 
+<div class="actions" style="margin-top: 8px;">
+  <button id="btn-restart" style="opacity: 0.6; font-size: 12px; padding: 6px 12px;">Restart (500 chips)</button>
+</div>
+
 <div id="log"></div>
 
 <script>
@@ -156,6 +160,7 @@ const btnCheckCall = document.getElementById("btn-check-call");
 const btnRaise = document.getElementById("btn-raise");
 const raiseInput = document.getElementById("raise-amount");
 const btnContinue = document.getElementById("btn-continue");
+const btnRestart = document.getElementById("btn-restart");
 
 function log(message, isError) {
   logEl.textContent = message;
@@ -332,6 +337,13 @@ btnRaise.addEventListener("click", () => {
   const amount = raiseTo - mySeat.bet_this_street;
   window.currentSocket.send(JSON.stringify({ action: "raise", amount: amount }));
   raiseInput.value = "";
+});
+btnRestart.addEventListener("click", () => {
+  // A restart makes any reveal currently on screen stale immediately --
+  // don't wait for a Continue click on a hand that no longer exists.
+  awaitingContinue = false;
+  btnContinue.style.display = "none";
+  window.currentSocket.send(JSON.stringify({ type: "restart" }));
 });
 
 connect();
