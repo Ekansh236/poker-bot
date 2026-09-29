@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -40,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'table',
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -90,10 +92,16 @@ CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# Env-var overrides so the same settings work against a local Homebrew
+# Postgres (no password by default) and a real deployment later.
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POKER_DB_NAME', 'pokerbot'),
+        'USER': os.environ.get('POKER_DB_USER', ''),
+        'PASSWORD': os.environ.get('POKER_DB_PASSWORD', ''),
+        'HOST': os.environ.get('POKER_DB_HOST', 'localhost'),
+        'PORT': os.environ.get('POKER_DB_PORT', '5432'),
     }
 }
 

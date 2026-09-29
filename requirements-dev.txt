@@ -1,5 +1,6 @@
 pytest
 django
+psycopg[binary]
 channels
 channels_redis
 daphne
