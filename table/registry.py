@@ -47,6 +47,11 @@ def seat_bot_if_needed(round_: Round) -> None:
             seat.is_bot = True
 
 
+def all_table_ids() -> list[str]:
+    """Every table_id with a live Round currently stored in Redis."""
+    return [key.decode().removeprefix("round:") for key in redis_client.scan_iter("round:*")]
+
+
 @contextlib.contextmanager
 def locked_round(table_id: str):
     """Safe read-modify-write access to a table's shared Round state.

@@ -2,6 +2,7 @@ from poker_engine.cards import Card, Deck, Rank, Suit
 from poker_engine.hand_evaluator import best_hand_from_seven
 from poker_engine.seat import Seat
 from enum import Enum
+import time
 
 class RoundState(Enum):
     PRE_FLOP = 1
@@ -23,6 +24,7 @@ class Round:
         self.current_bet_to_match = 0
         self.current_turn_index = 0
         self.button_index = 0
+        self.time_started = 0
 
     def _non_button_index(self):
         """The seat across from the button -- big blind, in heads-up."""
@@ -76,6 +78,7 @@ class Round:
         """
         self.apply_action(seat, action, amount)
         self.advance_if_possible()
+        self.time_started = time.time()
 
     def advance_if_possible(self):
         """Auto-advance as far as the current state allows.
@@ -91,36 +94,6 @@ class Round:
         etc. all already exist and work; nothing has ever chained them
         together automatically until now.
         """
-        # TODO(human): implement this.
-        #
-        # The loop condition is self.is_betting_round_complete() -- keep
-        # advancing as long as it's True. Each iteration needs to pick the
-        # right next step:
-        #
-        # 1. Fold-win check FIRST, every iteration: if
-        #    self.check_if_all_but_one_folded(), the hand is over right
-        #    now regardless of what street we're on -- call
-        #    self.showdown_resolution() (it doesn't require any particular
-        #    current_round_state to run), then self.start_new_hand().
-        #
-        # 2. Otherwise, branch on self.current_round_state to call the
-        #    right next method -- remember the state naming is offset by
-        #    one from what you'd expect (current_round_state == FLOP means
-        #    "preflop betting just finished, deal the flop next", not
-        #    "we're currently on the flop"). Check what each of
-        #    flop_community_cards()/turn_community_card()/
-        #    river_community_card()'s own `if` guards require.
-        #
-        # 3. When current_round_state == SHOWDOWN, that's the river betting
-        #    having just completed -- call self.showdown_resolution() then
-        #    self.start_new_hand(), same as the fold-win case.
-        #
-        # Trust the loop to terminate correctly on its own: think about
-        # why is_betting_round_complete() naturally becomes False right
-        # after any of these steps runs (what do flop_community_cards()
-        # and start_new_hand()/deal_hole_cards() both already do to every
-        # seat's has_acted_this_street?) -- that's what stops the loop
-        # once a real player needs to act.
         while self.is_betting_round_complete():
             if self.check_if_all_but_one_folded():
                 self.showdown_resolution()
