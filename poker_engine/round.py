@@ -25,6 +25,14 @@ class Round:
         self.current_turn_index = 0
         self.button_index = 0
         self.time_started = 0
+        # Set only by advance_if_possible() when a showdown/fold-win JUST
+        # resolved the hand it was called for; cleared at the start of every
+        # apply_action_and_advance() call. An all-in runout deals every
+        # remaining street AND starts the next hand within one call, so
+        # without this, the board/winner from that resolved hand would never
+        # be visible anywhere -- by the time the caller broadcasts, Round has
+        # already moved on to a brand new hand.
+        self.last_showdown = None
 
     def _non_button_index(self):
         """The seat across from the button -- big blind, in heads-up."""
@@ -76,6 +84,7 @@ class Round:
         single-action tests can still call apply_action() directly without
         triggering cascading street/hand transitions mid-assertion.
         """
+        self.last_showdown = None
         self.apply_action(seat, action, amount)
         self.advance_if_possible()
         self.time_started = time.time()
@@ -96,8 +105,7 @@ class Round:
         """
         while self.is_betting_round_complete():
             if self.check_if_all_but_one_folded():
-                self.showdown_resolution()
-                self.start_new_hand()
+                self._resolve_showdown_and_start_new_hand()
             elif self.current_round_state == RoundState.FLOP:
                 self.flop_community_cards()
             elif self.current_round_state == RoundState.TURN:
@@ -105,8 +113,16 @@ class Round:
             elif self.current_round_state == RoundState.RIVER:
                 self.river_community_card()
             elif self.current_round_state == RoundState.SHOWDOWN:
-                self.showdown_resolution()
-                self.start_new_hand()
+                self._resolve_showdown_and_start_new_hand()
+
+    def _resolve_showdown_and_start_new_hand(self):
+        board = [card.to_dict() for card in self.community_cards]
+        results = self.showdown_resolution()
+        self.last_showdown = {
+            "board": board,
+            "results": [{"player": seat.player, "amount": amount} for seat, amount in results],
+        }
+        self.start_new_hand()
 
     def burn_card(self):
         self.deck.deal_card()  # Burn a card (remove the top card from the deck)

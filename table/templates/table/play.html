@@ -181,8 +181,31 @@ function renderCards(container, cards, hiddenCount) {
   cards.forEach((c) => container.appendChild(cardEl(c, false)));
 }
 
+const SHOWDOWN_REVEAL_MS = 3000;
+
 function renderState(state) {
   latestState = state;
+  // last_showdown is only set when this action just resolved a hand (fold-
+  // win or real showdown) -- an all-in runout deals every remaining street
+  // AND starts the next hand within a single server-side call, so without
+  // this the board/result would never be visible: by the time we render,
+  // Round has already moved on. Show the resolved board + result first,
+  // frozen, then reveal the actual (already-arrived) new-hand state.
+  if (state.last_showdown) {
+    const sd = state.last_showdown;
+    renderCards(document.getElementById("community-cards"), sd.board);
+    document.getElementById("round-state").textContent = "showdown";
+    document.getElementById("pot").textContent = "Pot: --";
+    const winners = sd.results.filter((r) => r.amount > 0).map((r) => r.player + " +" + r.amount);
+    log(winners.length ? winners.join(", ") : "Hand ended.", false);
+    btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = true;
+    setTimeout(() => renderLiveState(state), SHOWDOWN_REVEAL_MS);
+    return;
+  }
+  renderLiveState(state);
+}
+
+function renderLiveState(state) {
   const mySeat = state.seats.find((s) => s.player === PLAYER_ID);
   const oppSeat = state.seats.find((s) => s.player !== PLAYER_ID);
   const myTurn = state.current_turn === PLAYER_ID;

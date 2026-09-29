@@ -13,19 +13,19 @@ def serialize_hand(seat: Seat) -> list[dict]:
 
 def serialize_round(round_: Round) -> dict:
     """Build the JSON-safe, opponent-safe state broadcast to the whole table."""
-    # TODO(human): build and return a dict describing the table's current
-    # public state -- pot, current turn, community cards, and each seat's
-    # public info (stack, folded/all-in status, bet this street).
-    #
-    # Do NOT include seat.cards for anyone here. Hole cards are private --
-    # delivering them to only the right player is a separate concern we'll
-    # handle later, not part of this shared broadcast.
     json_safe_state = {
         "pot": round_.pot,
         "round_state": round_.current_round_state.name,
         "community_cards": [card.to_dict() for card in round_.community_cards],
         "current_bet_to_match": round_.current_bet_to_match,
         "current_turn": round_.seats[round_.current_turn_index].player if round_.seats else None,
+        # Only set when a showdown/fold-win just resolved as part of
+        # whatever action produced this broadcast (e.g. an all-in runout
+        # dealing every remaining street and starting a new hand within a
+        # single call) -- otherwise the board/winner would never be visible
+        # anywhere, since Round has already moved on to the next hand by the
+        # time this is serialized. None the rest of the time.
+        "last_showdown": round_.last_showdown,
         "seats": [
             {
                 "player": seat.player,
