@@ -252,6 +252,9 @@ function showShowdownReveal(state) {
     awaitingContinue = false;
     btnContinue.style.display = "none";
     renderLiveState(latestState);
+    // Any hole_cards responses that arrived while we were holding the
+    // reveal were dropped -- fetch the new hand's cards now.
+    window.currentSocket.send(JSON.stringify({ type: "get_hand" }));
   };
 }
 
@@ -323,6 +326,14 @@ function connect() {
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === "hole_cards") {
+      // A get_hand request we fired for the hand on screen can be answered
+      // AFTER the bot has already resolved that hand and dealt a new one
+      // (bot_decide_task runs on Celery almost instantly after our own
+      // action broadcasts). Applying it now would silently swap the
+      // displayed cards out from under the player before they've even seen
+      // the showdown reveal. Drop it -- Continue re-requests a fresh one
+      // once the player has acknowledged the hand that's actually ending.
+      if (awaitingContinue) return;
       myHand = msg.cards;
       if (latestState) renderState(latestState);
       return;
