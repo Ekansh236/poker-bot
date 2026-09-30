@@ -33,6 +33,15 @@ class TableConsumer(AsyncWebsocketConsumer):
                 round_.deal_hole_cards()
 
             state_payload = serialize_round(round_)
+            # last_showdown is a one-shot signal meant only for the single
+            # broadcast immediately after a hand resolves -- it isn't
+            # cleared until the next apply_action_and_advance() call, so a
+            # client that (re)connects in the gap between a hand resolving
+            # and anyone's next action would otherwise see a stale, already
+            # -finished showdown replayed as if it just happened, frozen on
+            # screen (the UI holds all interaction for it). A fresh
+            # connection should only ever see live current state.
+            state_payload["last_showdown"] = None
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
