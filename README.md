@@ -11,13 +11,14 @@ by hand; framework boilerplate and infra glue are the only parts scaffolded dire
 
 | Milestone | Status |
 |---|---|
-| 1. Data modeling | Complete (conceptual — no DB models yet, see Known gaps) |
+| 1. Data modeling | In progress — real Postgres DB wired up, `accounts` app scaffolded; User/Table/Hand/Balance models not yet written |
 | 2. Pure Python Texas Hold'em engine | Complete — 59 passing tests |
 | 3. Real-time WebSockets + Redis game state | Complete — verified live with real WebSocket connections |
 | 4. Autonomous bot engine (Monte Carlo + pot odds + real Celery dispatch) | Complete |
 | 4.5. Blinds, button rotation, position-aware bot decisions, live auto-advancement | Complete |
 | 5. Celery Beat turn-timeouts, structlog, Flower monitoring | Complete |
-| 6-9. Stripe, AI coach, React frontend, Docker/CI | Not started |
+| 6. Stripe/VIP tiers | Dropped — no real payments in this project |
+| 7-9. AI coach, React frontend, Docker/CI | Not started |
 
 Also built ahead of schedule: a minimal local play UI (`table/templates/table/play.html`) to actually
 play a full game against the bot in a browser, independent of the real Milestone 8 React frontend.

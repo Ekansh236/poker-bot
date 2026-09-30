@@ -9,15 +9,15 @@ I am an undergraduate Computer Science student building a production-grade, dist
 ---
 
 ### PROJECT OVERVIEW: Real-Time Multiplayer Poker, Analytics & Autonomous Bot Platform
-A high-concurrency, real-time Texas Hold'em platform featuring autonomous playing bots, in-game context-aware AI coaching, multi-user live table chat, and VIP monetization tiers.
+A high-concurrency, real-time Texas Hold'em platform featuring autonomous playing bots, in-game context-aware AI coaching, and multi-user live table chat.
 
 Key Architectural Primitives Demonstrated:
 - Real-time bidirectional streaming & state synchronization (WebSockets)
 - In-memory caching, message brokering, and Pub/Sub mechanics
 - Asynchronous task offloading, scheduled cron jobs, and queue observability
-- Financial database transactions, pessimistic locking, and idempotency
+- Financial database transactions, pessimistic locking, and idempotency (internal chip ledger, no real payments)
 - Autonomous game decision bots (Monte Carlo equity simulation & pot odds)
-- Third-party API integration (Stripe Webhooks & LLM API Streaming)
+- Third-party API integration (LLM API Streaming)
 
 ---
 
@@ -29,7 +29,7 @@ Key Architectural Primitives Demonstrated:
 - Database: PostgreSQL (ACID transactions with pessimistic locking via SELECT FOR UPDATE)
 - Frontend: React with TypeScript, Tailwind CSS, TanStack Query, and Zustand
 - Autonomous Bot Engine: Python Monte Carlo hand equity evaluator & pot-odds heuristic solver
-- Third-Party APIs: Stripe API (Billing/Webhooks), OpenAI/Anthropic API (Context-Aware AI Table Coach)
+- Third-Party APIs: OpenAI/Anthropic API (Context-Aware AI Table Coach)
 - Local DevOps: Docker & Docker Compose
 - Testing & CI: Pytest + Pytest-Django, GitHub Actions
 
@@ -41,7 +41,7 @@ Key Architectural Primitives Demonstrated:
 - Milestone 3: Real-Time WebSockets & In-Memory Redis Game State (Django Channels Layer)
 - Milestone 4: Autonomous Playing Bot Engine (Monte Carlo Sim, Heuristics, Async Celery Action Dispatcher)
 - Milestone 5: Background Task Queue, Celery Beat Timeouts, and Flower Monitoring
-- Milestone 6: Stripe Payment Webhooks & VIP Tier Ingestion Pipeline
+- ~~Milestone 6: Stripe Payment Webhooks & VIP Tier Ingestion Pipeline~~ -- DROPPED, no real payments in this project. The chip ledger from Milestone 1 stays (it's still an internal double-entry system demonstrating the same transactional-integrity primitive), it just isn't funded by Stripe.
 - Milestone 7: Real-Time Contextual AI Poker Coach (LLM Chat Integration)
 - Milestone 8: React / TypeScript Frontend Dashboard & WebSocket UI
 - Milestone 9: Dockerization, CI/CD Pipeline, and Performance/Concurrency Testing
