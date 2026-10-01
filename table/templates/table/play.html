@@ -251,6 +251,14 @@ function showShowdownReveal(state) {
   btnContinue.onclick = () => {
     awaitingContinue = false;
     btnContinue.style.display = "none";
+    // Consume the showdown on this object, not just the awaitingContinue
+    // flag -- a get_hand response that was already in flight when the
+    // showdown broadcast arrived gets answered AFTER this click, and its
+    // handler re-renders via renderState(latestState). Without this,
+    // state.last_showdown is still truthy on that same object, so it
+    // re-enters showShowdownReveal and snaps the UI straight back to the
+    // frozen reveal -- stuck until a reload wipes latestState clean.
+    latestState.last_showdown = null;
     renderLiveState(latestState);
     // Any hole_cards responses that arrived while we were holding the
     // reveal were dropped -- fetch the new hand's cards now.
