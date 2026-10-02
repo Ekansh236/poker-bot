@@ -98,6 +98,33 @@
     min-height: 16px;
   }
   #log.error { color: #e06c6c; opacity: 1; }
+
+  #game-over-banner {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-top: 20px;
+    padding: 22px 32px;
+    background: #0f5132;
+    border: 2px solid #ffd54a;
+    border-radius: 12px;
+  }
+  #game-over-text {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #ffd54a;
+  }
+  .btn-prominent {
+    background: #ffd54a;
+    color: #1a1a1a;
+    border: none;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 12px 30px;
+  }
+  .btn-prominent:hover { background: #ffe07a; }
 </style>
 </head>
 <body>
@@ -136,6 +163,11 @@
   <button id="btn-continue" style="display: none;">Continue</button>
 </div>
 
+<div id="game-over-banner">
+  <div id="game-over-text">YOU WIN!</div>
+  <button id="btn-play-again" class="btn-prominent">Play Again</button>
+</div>
+
 <div class="actions" style="margin-top: 8px;">
   <button id="btn-restart" style="opacity: 0.6; font-size: 12px; padding: 6px 12px;">Restart (500 chips)</button>
 </div>
@@ -163,6 +195,9 @@ const btnRaise = document.getElementById("btn-raise");
 const raiseInput = document.getElementById("raise-amount");
 const btnContinue = document.getElementById("btn-continue");
 const btnRestart = document.getElementById("btn-restart");
+const gameOverBanner = document.getElementById("game-over-banner");
+const gameOverText = document.getElementById("game-over-text");
+const btnPlayAgain = document.getElementById("btn-play-again");
 
 function log(message, isError) {
   logEl.textContent = message;
@@ -277,8 +312,11 @@ function renderLiveState(state) {
     document.getElementById("round-state").textContent = "game over";
     log(winner ? `${winner.player} wins -- ${broke.player} is out of chips.` : "Game over.", false);
     btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = true;
+    gameOverText.textContent = mySeat && mySeat.stack > 0 ? "YOU WIN!" : "YOU LOSE";
+    gameOverBanner.style.display = "flex";
     return;
   }
+  gameOverBanner.style.display = "none";
 
   document.getElementById("round-state").textContent = state.round_state.replace("_", " ");
   document.getElementById("pot").textContent = "Pot: " + state.pot;
@@ -375,13 +413,16 @@ btnRaise.addEventListener("click", () => {
   window.currentSocket.send(JSON.stringify({ action: "raise", amount: amount }));
   raiseInput.value = "";
 });
-btnRestart.addEventListener("click", () => {
+function doRestart() {
   // A restart makes any reveal currently on screen stale immediately --
   // don't wait for a Continue click on a hand that no longer exists.
   awaitingContinue = false;
   btnContinue.style.display = "none";
+  gameOverBanner.style.display = "none";
   window.currentSocket.send(JSON.stringify({ type: "restart" }));
-});
+}
+btnRestart.addEventListener("click", doRestart);
+btnPlayAgain.addEventListener("click", doRestart);
 
 connect();
 </script>
