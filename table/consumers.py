@@ -1,9 +1,11 @@
 import json
 
 import structlog
+from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from table import registry
+from table.persistence import persist_hand_result
 from table.serializers import serialize_hand, serialize_round
 from table.tasks import bot_decide_task
 
@@ -111,6 +113,13 @@ class TableConsumer(AsyncWebsocketConsumer):
                 action=action, amount=amount,
                 round_state=round_.current_round_state.name, pot=round_.pot,
             )
+
+            if round_.last_showdown:
+                # persist_hand_result() makes synchronous Django ORM calls --
+                # not allowed directly from this async method, hence
+                # sync_to_async. Still runs inside this same locked_round()
+                # block, per the "DB write inside the lock" call.
+                await sync_to_async(persist_hand_result)(self.table_id, round_)
 
             # Broadcast the updated round state to all players at the table.
             broadcast_payload = serialize_round(round_)
