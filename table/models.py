@@ -12,4 +12,10 @@ class Hand(models.Model):
     pot = models.IntegerField()
     # Shape at creation time: [{"player": "alice", "amount": 620}, ...]
     results = models.JSONField()
+    hand_number = models.IntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["table", "hand_number"], name="unique_hand_number_per_table"),
+        ]
 
