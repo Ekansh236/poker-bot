@@ -33,6 +33,21 @@ class Round:
         # be visible anywhere -- by the time the caller broadcasts, Round has
         # already moved on to a brand new hand.
         self.last_showdown = None
+        # TODO(human): current_hand_id needs a real initial value here --
+        # a stable identifier for THIS hand (the very first one dealt by
+        # consumers.py's connect(), which calls deal_hole_cards() directly,
+        # bypassing start_new_hand() entirely -- this is the only place
+        # that path's hand gets an id). Also assign a NEW one in
+        # start_new_hand() and restart() (both deal a fresh hand the same
+        # way __init__ implicitly does for hand 1), and capture the
+        # CURRENT value into last_showdown inside
+        # _resolve_showdown_and_start_new_hand() -- see the comment there
+        # for exactly where, and why the order matters.
+        #
+        # Value type is your call: an incrementing int counter (readable
+        # in logs, e.g. "hand #42") or a UUID (no counter state to keep in
+        # sync, trivially unique with no coordination).
+        self.current_hand_id = 1
         # Set once a hand resolves with some seat's stack at 0 -- no
         # bankroll/elimination handling exists beyond this, so heads-up the
         # game simply ends rather than trying to deal a broke player into
@@ -70,6 +85,7 @@ class Round:
         exactly the gap Seat.reset_for_new_hand() was written for back in
         Milestone 2 but never actually got called anywhere until now.
         """
+        self.current_hand_id += 1
         for seat in self.seats:
             seat.reset_for_new_hand()
         self.community_cards = []
@@ -78,6 +94,8 @@ class Round:
         self.deck.shuffle()
         self.current_round_state = RoundState.PRE_FLOP
         self.button_index = self._non_button_index()  # Rotate the button
+        # (see the TODO(human) in __init__) assign this new hand's id here,
+        # before dealing it.
         self.deal_hole_cards()
 
     def restart(self, starting_stack: int = 500):
@@ -88,6 +106,7 @@ class Round:
         everything, including a game_over from a prior bust-out, and start
         over exactly like a freshly created table.
         """
+        self.current_hand_id += 1
         for seat in self.seats:
             seat.stack = starting_stack
             seat.reset_for_new_hand()
@@ -101,6 +120,8 @@ class Round:
         self.last_showdown = None
         self.last_action = None
         self.time_started = 0
+        # (see the TODO(human) in __init__) same as start_new_hand() -- this
+        # deals a fresh hand directly too, so it needs a fresh id as well.
         self.deal_hole_cards()
 
     def apply_action_and_advance(self, seat: Seat, action: str, amount: int = 0):
@@ -163,6 +184,13 @@ class Round:
             "board": board,
             "results": [{"player": seat.player, "amount": amount} for seat, amount in results],
             "hands": hands,
+            "hand_id": self.current_hand_id
+            # (see the TODO(human) in __init__) capture self.current_hand_id
+            # HERE -- this dict is built before start_new_hand() runs below,
+            # which is what will overwrite current_hand_id with the NEXT
+            # hand's id. Capturing it after that call would record the
+            # wrong hand, the same ordering trap last_showdown itself exists
+            # to avoid for the client.
         }
         # A broke seat (stack 0) could never post a real blind for another
         # hand -- there's no bankroll/elimination handling beyond this, so
