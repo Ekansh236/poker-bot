@@ -69,6 +69,29 @@ def breakeven_equity(amount_to_call: int, pot: int) -> float:
     """
     return amount_to_call / (pot + amount_to_call)
 
+def clamp(value, low, high):
+    return max(low, min(value, high))
+
+def p_value(equity, x_lo, x_hi, p_lo, p_hi):
+    """Clamped linear interpolation from equity onto a raise probability.
+
+    Flat at p_lo below x_lo, flat at p_hi above x_hi, interpolated between.
+    Returns the probability itself -- sampling it with random.random() is
+    the caller's job, same contract as breakeven_equity().
+    """
+    fraction = clamp((equity - x_lo) / (x_hi - x_lo), 0, 1)
+    return p_lo + fraction * (p_hi - p_lo)
+
+def p_bluff(bet_size, pot):
+    """Damped, capped version of the optimal bluff-to-value ratio.
+
+    bet_size / (pot + 2*bet_size) is the frequency that makes a caller
+    indifferent between calling and folding -- an aggressive baseline.
+    Damping it and capping it keeps this bot's bluffing occasional rather
+    than textbook-optimal.
+    """
+    raw = bet_size / (pot + 2 * bet_size)
+    return min(0.4 * raw, 0.18)
 
 def decide_action(
     equity: float, amount_to_call: int, pot: int, is_button: bool = False
@@ -84,20 +107,41 @@ def decide_action(
     # tighter (higher thresholds). 0.02 is a starting value, not a derived
     # one -- there's no exact formula for this, unlike breakeven_equity().
     position_adjustment = -0.02 if is_button else 0.02
+    value_threshold = 0.55
 
     if amount_to_call == 0:
-        if equity > 0.55 + position_adjustment:
-            return ("raise", pot // 2) if pot > 0 else ("raise", 10)
+        x_lo = value_threshold + position_adjustment
+        x_hi = 0.9
+        p_lo = 0.2
+        p_hi = 0.6
+        raise_probability = p_value(equity, x_lo, x_hi, p_lo, p_hi)
+        bet_size = pot // 2 if pot > 0 else 10
+        bluff_probability = p_bluff(bet_size, pot)
+        if random.random() < raise_probability:
+            return ("raise", bet_size)
+        elif random.random() < bluff_probability:
+            return ("raise", bet_size)
         else:
             return ("check", 0)
     else:
-        if equity < breakeven_equity(amount_to_call, pot) + position_adjustment:
-            return ("fold", 0)
-        elif equity > breakeven_equity(amount_to_call, pot) + 0.1 + position_adjustment:
-            raise_increment = pot // 2 if pot > 0 else 10
-            return ("raise", amount_to_call + raise_increment)
+        fold_cutoff = breakeven_equity(amount_to_call, pot) + position_adjustment
+        x_lo = fold_cutoff + 0.1
+        x_hi = x_lo + 0.25
+        p_lo = 0.20
+        p_hi = 0.55
+        raise_probability = p_value(equity, x_lo, x_hi, p_lo, p_hi)
+        bet_size = amount_to_call + (pot // 2 if pot > 0 else 10)
+        bluff_probability = p_bluff(bet_size, pot)
+        if random.random() < raise_probability:
+            return ("raise", bet_size)
+        elif equity < fold_cutoff:
+            if random.random() < bluff_probability:
+                return ("raise", bet_size)
+            else:
+                return ("fold", 0)
         else:
             return ("call", amount_to_call)
+
 
 
 def bot_decide(round_, seat) -> tuple[str, int]:
@@ -106,32 +150,6 @@ def bot_decide(round_, seat) -> tuple[str, int]:
     Pulls the real values estimate_equity() and decide_action() need off
     the live game objects, then chains the two together.
     """
-    # TODO(human): implement this wrapper.
-    #
-    # 1. hole_cards = seat.cards, community_cards = round_.community_cards.
-    #
-    # 2. num_opponents: count seats in round_.seats that are NOT this seat
-    #    and NOT folded (is_folded). Include all-in seats -- they're still
-    #    competing for the pot even though they can't act anymore.
-    #
-    #    Edge case worth guarding against: what if that count comes out to
-    #    0? estimate_equity(..., num_opponents=0, ...) crashes -- confirmed
-    #    above, max() on an empty list of opponent ranks. This shouldn't
-    #    happen in a well-formed game loop (the hand ends via
-    #    check_if_all_but_one_folded() before a bot would be asked to act
-    #    with zero opponents left), but decide what THIS function should do
-    #    if it ever does happen -- crash loudly, or handle it explicitly?
-    #
-    # 3. amount_to_call = round_.current_bet_to_match - seat.bet_this_street
-    #    pot = round_.pot
-    #
-    # 4. equity = estimate_equity(hole_cards, community_cards, num_opponents)
-    #    -- pick a num_trials value. More trials = more accurate but slower;
-    #    this tradeoff is exactly why sub-step 4 (Celery) exists, but this
-    #    function doesn't need to solve that yet, just pick something
-    #    reasonable for now.
-    #
-    # 5. return decide_action(equity, amount_to_call, pot)
     hole_cards = seat.cards
     community_cards = round_.community_cards
     num_opponents = sum(
