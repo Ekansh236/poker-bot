@@ -107,12 +107,12 @@ def decide_action(
     # tighter (higher thresholds). 0.02 is a starting value, not a derived
     # one -- there's no exact formula for this, unlike breakeven_equity().
     position_adjustment = -0.02 if is_button else 0.02
-    value_threshold = 0.55
+    value_threshold = 0.60
 
     if amount_to_call == 0:
         x_lo = value_threshold + position_adjustment
         x_hi = 0.9
-        p_lo = 0.2
+        p_lo = 0.03
         p_hi = 0.6
         raise_probability = p_value(equity, x_lo, x_hi, p_lo, p_hi)
         bet_size = pot // 2 if pot > 0 else 10
@@ -125,9 +125,9 @@ def decide_action(
             return ("check", 0)
     else:
         fold_cutoff = breakeven_equity(amount_to_call, pot) + position_adjustment
-        x_lo = fold_cutoff + 0.1
+        x_lo = fold_cutoff + 0.15
         x_hi = x_lo + 0.25
-        p_lo = 0.20
+        p_lo = 0.03
         p_hi = 0.55
         raise_probability = p_value(equity, x_lo, x_hi, p_lo, p_hi)
         bet_size = amount_to_call + (pot // 2 if pot > 0 else 10)
