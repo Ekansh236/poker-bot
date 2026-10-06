@@ -294,6 +294,14 @@ class Round:
     def apply_action(self, seat: Seat, action: str, amount: int = 0):
         if self.game_over:
             raise ValueError("The game is over -- one seat is out of chips.")
+        # A table can exist (seats claimed, nobody dealt in yet) before its
+        # first hand is ever dealt -- connect() no longer deals automatically,
+        # only an explicit "restart" does, so a seat sitting at the default
+        # PRE_FLOP/cards=None state could otherwise "act" on a hand that was
+        # never dealt, advancing the turn to a seat with no cards at all
+        # (estimate_equity() then crashes on a bot with hole_cards=None).
+        if all(s.cards is None for s in self.seats):
+            raise ValueError("No hand has been dealt yet -- click Restart to deal the first hand.")
         if seat != self.seats[self.current_turn_index]:
             raise ValueError("It's not this seat's turn to act.")
         if action == "fold":

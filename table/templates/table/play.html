@@ -556,7 +556,9 @@ function renderLiveState(state) {
   document.getElementById("pot").textContent = "Pot: " + state.pot;
   renderCards(document.getElementById("community-cards"), state.community_cards);
 
-  if (state.last_action) {
+  if (state.round_state === "PRE_FLOP") {
+    announce("Click “Restart (500 chips)” below to deal the first hand.", false);
+  } else if (state.last_action) {
     const actor = state.last_action.player;
     announce((actor === PLAYER_ID ? "You" : actor) + " " + describeAction(state.last_action).toLowerCase() +
       (state.current_turn ? ` -- ${state.current_turn === PLAYER_ID ? "your" : state.current_turn + "'s"} turn now` : ""), false);
@@ -605,7 +607,12 @@ function renderLiveState(state) {
     }
 
     const amountToCall = state.current_bet_to_match - mySeat.bet_this_street;
-    const canAct = myTurn && !mySeat.is_folded && !mySeat.is_all_in;
+    // "PRE_FLOP" (as opposed to the FLOP-labeled preflop-betting state
+    // deal_hole_cards() immediately transitions into) only ever means no
+    // hand has been dealt at this table yet -- every hand after the first
+    // goes straight through FLOP/TURN/RIVER/SHOWDOWN, never back to this.
+    const dealt = state.round_state !== "PRE_FLOP";
+    const canAct = dealt && myTurn && !mySeat.is_folded && !mySeat.is_all_in;
     btnFold.disabled = !canAct;
     btnCheckCall.disabled = !canAct;
     btnRaise.disabled = !canAct;
