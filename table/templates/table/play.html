@@ -10,8 +10,14 @@
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #0b3d24;
-    color: #eee;
+    /* A dim, warm "casino room" behind the table -- deliberately NOT
+       green, so the green felt actually reads as a distinct object
+       instead of blending into the page. */
+    background:
+      radial-gradient(ellipse 90% 60% at 50% 15%, rgba(120,80,30,0.14), transparent 60%),
+      radial-gradient(ellipse 120% 80% at 50% 100%, #1a120a 0%, #0a0704 70%);
+    background-color: #0a0704;
+    color: #f0e6d2;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -35,17 +41,18 @@
   .topbar-right { display: flex; align-items: center; gap: 10px; }
 
   #btn-invite {
-    background: #1a5c37; color: #eee; border: 1px solid #2f8a54;
+    background: #2a1f14; color: #e8cf9a; border: 1px solid #6b4a24;
     border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+    transition: transform 0.1s ease, background 0.15s ease;
   }
-  #btn-invite:hover { background: #237046; }
+  #btn-invite:hover { background: #3a2a1a; transform: translateY(-1px); }
 
   #invite-box {
     display: none;
     width: 100%;
     max-width: 760px;
-    background: #0f5132;
-    border: 1px solid #ffd54a;
+    background: #241a10;
+    border: 1px solid #d4af6a;
     border-radius: 8px;
     padding: 10px 14px;
     margin-bottom: 10px;
@@ -58,11 +65,11 @@
   #invite-link {
     flex: 1;
     min-width: 180px;
-    background: #0b2e1c;
-    border: 1px solid #2f8a54;
+    background: #140e08;
+    border: 1px solid #6b4a24;
     border-radius: 5px;
     padding: 6px 8px;
-    color: #cde9d8;
+    color: #e8cf9a;
     font-size: 12px;
   }
   #btn-copy-invite {
@@ -96,10 +103,17 @@
   .table-oval {
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at 50% 42%, #156b3f 0%, #0f5132 65%, #0c4028 100%);
-    border: 10px solid #6b4423;
+    background: radial-gradient(ellipse at 50% 38%, #1f8a54 0%, #136b40 48%, #0a4028 78%, #072e1c 100%);
+    border: 9px solid #4a2e18;
     border-radius: 50%;
-    box-shadow: inset 0 0 40px rgba(0,0,0,0.45), 0 10px 30px rgba(0,0,0,0.5);
+    /* Gold inlay ring between the wood rail and the felt, like a real
+       table's trim -- plus a deeper vignette for more contrast/depth
+       than a flat fill. */
+    box-shadow:
+      inset 0 0 0 3px #caa44a,
+      inset 0 0 55px rgba(0,0,0,0.55),
+      inset 0 10px 40px rgba(0,0,0,0.3),
+      0 14px 34px rgba(0,0,0,0.65);
   }
 
   .center-content {
@@ -122,6 +136,13 @@
     font-size: 17px;
     font-weight: 700;
     color: #ffd54a;
+    display: inline-block;
+  }
+  .pot-display.pot-pulse { animation: potPulse 0.4s ease; }
+  @keyframes potPulse {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.3); color: #fff2c4; }
+    100% { transform: scale(1); }
   }
 
   .cards { display: flex; gap: 5px; justify-content: center; }
@@ -133,10 +154,24 @@
     font-weight: 700; font-size: 13px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.4);
     flex: 0 0 auto;
+    animation: dealIn 0.28s ease-out;
+  }
+  @keyframes dealIn {
+    from { opacity: 0; transform: translateY(-10px) scale(0.6) rotate(-6deg); }
+    to { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
   }
   .card.red { color: #c0392b; }
   .card.black { color: #222; }
-  .card.hidden { background: #2a2a2a; color: transparent; }
+  /* Classic diamond-lattice card back instead of a flat gray box. */
+  .card.hidden {
+    background:
+      repeating-linear-gradient(45deg, rgba(212,175,106,0.28) 0 2.5px, transparent 2.5px 7px),
+      repeating-linear-gradient(-45deg, rgba(212,175,106,0.28) 0 2.5px, transparent 2.5px 7px),
+      #6e1626;
+    border: 1.5px solid #d4af6a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 0 0 2px rgba(0,0,0,0.25);
+    color: transparent;
+  }
 
   /* -- opponent seats, positioned around the rail via JS left/top -- */
   .seat {
@@ -144,8 +179,8 @@
     transform: translate(-50%, -50%);
     width: 96px;
     text-align: center;
-    background: rgba(8, 30, 20, 0.82);
-    border: 1.5px solid rgba(255,255,255,0.12);
+    background: rgba(24, 16, 11, 0.88);
+    border: 1.5px solid rgba(212,175,106,0.22);
     border-radius: 10px;
     padding: 7px 6px 6px;
     transition: box-shadow 0.2s, border-color 0.2s;
@@ -154,6 +189,7 @@
     border-color: #ffd54a;
     box-shadow: 0 0 0 3px rgba(255,213,74,0.45), 0 0 16px 3px rgba(255,213,74,0.5);
     animation: seatPulse 1.4s ease-in-out infinite;
+    z-index: 5;
   }
   @keyframes seatPulse {
     0%, 100% { box-shadow: 0 0 0 3px rgba(255,213,74,0.45), 0 0 16px 3px rgba(255,213,74,0.5); }
@@ -162,8 +198,25 @@
   .seat .label { font-size: 12px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .seat.active-turn .label { color: #ffd54a; font-weight: 700; opacity: 1; }
   .seat .stack { font-size: 12px; margin-top: 2px; opacity: 0.8; }
-  .seat .cards { margin-top: 4px; transform: scale(0.8); transform-origin: center; }
+  .seat .cards {
+    margin-top: 4px;
+    transform: scale(0.8);
+    transform-origin: center;
+    transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
+  }
+  /* "Whoever's turn it is, their cards enlarge" -- opponents' cards are
+     always face-down, but popping them up is still a clear live cue. */
+  .seat.active-turn .cards { transform: scale(1.05); }
   .seat .status-line { min-height: 14px; margin-top: 3px; }
+
+  .winner-glow {
+    animation: winnerGlow 0.9s ease-in-out 3 !important;
+    border-color: #ffd54a !important;
+  }
+  @keyframes winnerGlow {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(255,213,74,0.5), 0 0 20px 6px rgba(255,213,74,0.5); }
+    50% { box-shadow: 0 0 0 5px rgba(255,213,74,0.9), 0 0 34px 10px rgba(255,213,74,0.85); }
+  }
 
   .action-badge {
     display: inline-block;
@@ -191,8 +244,8 @@
     margin-top: 14px;
     padding: 12px 16px;
     border-radius: 12px;
-    border: 1.5px solid rgba(255,255,255,0.12);
-    background: rgba(8, 30, 20, 0.5);
+    border: 1.5px solid rgba(212,175,106,0.22);
+    background: rgba(24, 16, 11, 0.6);
     transition: border-color 0.2s, box-shadow 0.2s;
   }
   .my-seat-wrap.active-turn {
@@ -203,7 +256,12 @@
   .my-seat-wrap.active-turn .label { color: #ffd54a; font-weight: 700; opacity: 1; }
   .my-seat-wrap .stack { font-size: 15px; margin-top: 2px; }
   .my-seat-wrap .status-line { min-height: 16px; margin-top: 4px; }
-  .my-seat-wrap .cards { margin-top: 8px; }
+  .my-seat-wrap .cards {
+    margin-top: 8px;
+    transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
+  }
+  /* My own cards enlarge when it's actually my turn. */
+  .my-seat-wrap.active-turn .cards { transform: scale(1.15); }
   .my-seat-wrap .card { width: 40px; height: 56px; font-size: 15px; }
 
   .actions {
@@ -215,17 +273,25 @@
     justify-content: center;
   }
   button.action-btn {
-    background: #1a5c37;
+    background: #1f4a38;
     color: #eee;
-    border: 1px solid #2f8a54;
+    border: 1px solid #3a7a5c;
     border-radius: 6px;
     padding: 10px 16px;
     font-size: 14px;
     cursor: pointer;
+    transition: transform 0.08s ease, background 0.15s ease, box-shadow 0.15s ease;
   }
   button.action-btn:disabled { opacity: 0.35; cursor: default; }
-  button.action-btn:not(:disabled):hover { background: #237046; }
-  button.action-btn.fold { border-color: #a04040; }
+  button.action-btn:not(:disabled):hover { background: #2a6b4e; transform: translateY(-1px); }
+  button.action-btn:not(:disabled):active { transform: translateY(0) scale(0.96); }
+  /* Color-code by action meaning, same language as the action badges:
+     fold = danger red, raise = aggressive gold. Breaks up what was an
+     all-green button row. */
+  button.action-btn.fold { background: #5c2029; border-color: #8a3540; }
+  button.action-btn.fold:not(:disabled):hover { background: #732a35; }
+  button.action-btn#btn-raise { background: #6b4a14; border-color: #d4af6a; }
+  button.action-btn#btn-raise:not(:disabled):hover { background: #8a611c; }
   input[type=number] {
     width: 80px;
     padding: 9px 8px;
@@ -253,9 +319,10 @@
     gap: 14px;
     margin-top: 20px;
     padding: 22px 32px;
-    background: #0f5132;
+    background: #241a10;
     border: 2px solid #ffd54a;
     border-radius: 12px;
+    box-shadow: 0 0 30px rgba(255,213,74,0.25);
   }
   #game-over-text {
     font-size: 24px;
@@ -350,6 +417,7 @@ const RANK_LABEL = {
 
 let myHand = [];
 let latestState = null;
+let lastRenderedPot = null;
 
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
@@ -381,8 +449,7 @@ function announce(message, isError) {
 function cardEl(card, hidden) {
   const el = document.createElement("div");
   if (hidden) {
-    el.className = "card hidden";
-    el.textContent = "??";
+    el.className = "card hidden"; // the diamond-lattice pattern is the back, no text needed
     return el;
   }
   el.className = "card " + (RED_SUITS.has(card.suit) ? "red" : "black");
@@ -495,13 +562,16 @@ function showShowdownReveal(state) {
   renderCards(document.getElementById("community-cards"), sd.board);
   document.getElementById("round-state").textContent = "showdown";
   document.getElementById("pot").textContent = "Pot: --";
+  const winnerNames = new Set(sd.results.filter((r) => r.amount > 0).map((r) => r.player));
   const winners = sd.results.filter((r) => r.amount > 0).map((r) => r.player + " +" + r.amount);
   announce(winners.length ? winners.join(", ") + " won the hand" : "Hand ended.", false);
 
+  if (winnerNames.has(PLAYER_ID)) mySeatWrap.classList.add("winner-glow");
   state.seats.filter((s) => s.player !== PLAYER_ID).forEach((oppSeat) => {
     if (sd.hands[oppSeat.player]) {
       renderCards(getOpponentSeatEl(oppSeat.player).querySelector(".cards"), sd.hands[oppSeat.player]);
     }
+    if (winnerNames.has(oppSeat.player)) getOpponentSeatEl(oppSeat.player).classList.add("winner-glow");
   });
   if (sd.hands[PLAYER_ID]) {
     renderCards(document.getElementById("my-cards"), sd.hands[PLAYER_ID]);
@@ -533,6 +603,10 @@ function renderLiveState(state) {
   const myTurn = state.current_turn === PLAYER_ID;
 
   positionOpponentSeats(state.seats);
+  // Clear any showdown-reveal glow before rendering this hand's live state
+  // -- otherwise last hand's winner stays lit forever.
+  mySeatWrap.classList.remove("winner-glow");
+  opponentSeatEls.forEach((el) => el.classList.remove("winner-glow"));
 
   if (state.game_over) {
     // Engine note: game_over only fires once fewer than 2 seats still have
@@ -553,7 +627,14 @@ function renderLiveState(state) {
   gameOverBanner.style.display = "none";
 
   document.getElementById("round-state").textContent = state.round_state.replace("_", " ");
-  document.getElementById("pot").textContent = "Pot: " + state.pot;
+  const potEl = document.getElementById("pot");
+  potEl.textContent = "Pot: " + state.pot;
+  if (state.pot !== lastRenderedPot) {
+    potEl.classList.remove("pot-pulse");
+    void potEl.offsetWidth; // force reflow so the animation restarts
+    potEl.classList.add("pot-pulse");
+    lastRenderedPot = state.pot;
+  }
   renderCards(document.getElementById("community-cards"), state.community_cards);
 
   if (state.round_state === "PRE_FLOP") {
