@@ -7,7 +7,7 @@ from poker_engine.cards import Deck
 from poker_engine.round import Round
 from poker_engine.seat import Seat
 
-SEATS_PER_TABLE = 10
+SEATS_PER_TABLE = 5
 LOCK_TIMEOUT_SECONDS = 10  # safety valve -- auto-releases if a worker crashes mid-lock
 BOT_PLAYER_ID = "bot"
 
