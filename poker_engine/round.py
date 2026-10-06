@@ -51,7 +51,23 @@ class Round:
 
     def _non_button_index(self):
         """The seat across from the button -- big blind, in heads-up."""
-        return (self.button_index + 1) % len(self.seats)
+        return self._next_active_seat_index(self.button_index)
+
+    def _next_active_seat_index(self, from_index):
+        """The next seat after from_index (wrapping) that still has chips.
+
+        Busted seats (stack 0) are permanently excluded from blind posting,
+        button rotation, and postflop first-to-act -- all of which assign
+        self.current_turn_index directly rather than going through
+        advance_turn()'s own folded/all-in skip, so they'd otherwise hand a
+        turn straight to a seat that can never act again.
+        """
+        index = from_index
+        for _ in range(len(self.seats)):
+            index = (index + 1) % len(self.seats)
+            if self.seats[index].stack > 0:
+                return index
+        raise ValueError("No active seats left -- game_over should already be True.")
 
     def deal_hole_cards(self):
         if RoundState.PRE_FLOP != self.current_round_state:
@@ -72,15 +88,20 @@ class Round:
             self.pot += small_blind_posted + big_blind_posted
             self.current_turn_index = self.button_index  # Button acts first preflop
         else:
-            small_blind_posted = self.seats[self._non_button_index()].put_in_pot(self.SMALL_BLIND)
-            big_blind_posted = self.seats[(self.button_index + 2) % len(self.seats)].put_in_pot(self.BIG_BLIND)
+            small_blind_index = self._non_button_index()
+            big_blind_index = self._next_active_seat_index(small_blind_index)
+            small_blind_posted = self.seats[small_blind_index].put_in_pot(self.SMALL_BLIND)
+            big_blind_posted = self.seats[big_blind_index].put_in_pot(self.BIG_BLIND)
             self.pot += small_blind_posted + big_blind_posted
-            self.current_turn_index = (self.button_index + 3) % len(self.seats)
+            self.current_turn_index = self._next_active_seat_index(big_blind_index)
 
         self.current_bet_to_match = self.BIG_BLIND  # Always BIG_BLIND regardless of seat count.
         for seat in self.seats:
-            seat.cards = (self.deck.deal_card(), self.deck.deal_card())
-            seat.has_acted_this_street = False  # Reset action status for the new hand
+            if seat.stack > 0:
+                seat.cards = (self.deck.deal_card(), self.deck.deal_card())
+                seat.has_acted_this_street = False  # Reset action status for the new hand
+            else:
+                seat.cards = None  # Busted -- no hand to hold, not even a stale one.
         self.current_round_state = RoundState.FLOP  # Transition to FLOP state after dealing hole cards
 
     def start_new_hand(self):
@@ -93,7 +114,8 @@ class Round:
         """
         self.current_hand_id += 1
         for seat in self.seats:
-            seat.reset_for_new_hand()
+            if seat.stack > 0:
+                seat.reset_for_new_hand()
         self.community_cards = []
         self.pot = 0
         self.deck = Deck()
@@ -186,40 +208,22 @@ class Round:
             "board": board,
             "results": [{"player": seat.player, "amount": amount} for seat, amount in results],
             "hands": hands,
-            # Captured HERE, before start_new_hand() runs below and
-            # overwrites current_hand_id with the NEXT hand's id -- the
-            # same ordering trap last_showdown itself exists to avoid for
-            # the client.
             "hand_id": self.current_hand_id,
         }
-        # TODO(human): "any seat busted -> whole game over" was fine at a
-        # 2-seat table (busting IS losing), but at 3+ seats it currently
-        # ends the game for everyone the moment the FIRST player busts, even
-        # with several others still holding chips. The real end condition
-        # is "fewer than 2 seats still have a stack > 0".
-        #
-        # A busted seat needs to be excluded from every future hand, not
-        # just skipped once: no cards dealt to it, no blind posted by or to
-        # it, never the button, never on the clock. The tricky part is that
-        # reset_for_new_hand() unconditionally clears is_folded and
-        # is_all_in at the start of every hand -- so a busted seat (stack
-        # 0, currently indistinguishable from "folded" or "all-in" once the
-        # hand that busted it ends) would silently come back to life next
-        # hand unless something marks it as OUT in a way that survives
-        # reset_for_new_hand(), not just this hand's state.
-        #
-        # That's the actual design decision: do you check `seat.stack <= 0`
-        # directly everywhere a seat's eligibility already gets checked
-        # (deal_hole_cards()'s blind posting, start_new_hand()'s button
-        # rotation via _non_button_index(), advance_turn()'s folded/all-in
-        # skip), or introduce a dedicated flag (e.g. is_eliminated) set once
-        # and never cleared by reset_for_new_hand()? Either can work --
-        # pick one and apply it consistently at all three of those call
-        # sites, not just the end-condition check below.
-        #
-        # Must still: end the game (self.game_over = True, self.pot = 0,
-        # same as today) once only one seat has chips left, and otherwise
-        # call self.start_new_hand() as today.
+        # The game only actually ends once fewer than 2 seats still have
+        # chips -- busted seats stay excluded from every hand after this
+        # one via seat.stack itself: start_new_hand()'s reset_for_new_hand()
+        # guard leaves a busted seat permanently is_all_in (so advance_turn()
+        # already skips it), and _next_active_seat_index() keeps blind
+        # posting, button rotation, and postflop first-to-act from ever
+        # landing a turn on one directly.
+        playing = sum(1 for seat in self.seats if seat.stack > 0)
+
+        if playing <= 1:
+            self.game_over = True
+            self.pot = 0
+        else:
+            self.start_new_hand()
 
     def burn_card(self):
         self.deck.deal_card()  # Burn a card (remove the top card from the deck)

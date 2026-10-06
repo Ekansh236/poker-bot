@@ -38,8 +38,12 @@ def test_bust_with_three_seats_does_not_end_the_game():
     round_._resolve_showdown_and_start_new_hand()
 
     # Two seats (A and C) still have chips -- busting B alone must not end it.
+    # NOTE: can't assert a.stack == 600 here -- when the game continues,
+    # this method also immediately deals and blinds the NEXT hand (same
+    # contract as before this feature existed), so A's stack moves again
+    # based on whatever it's dealt into next. That's covered separately by
+    # test_busted_seat_posts_no_blind_and_never_acts.
     assert round_.game_over is False
-    assert a.stack == 600  # 400 remaining + 200 won
     assert b.stack == 0
 
 
