@@ -42,6 +42,17 @@
   .seat .status { font-size: 12px; color: #e0a86c; min-height: 14px; }
   .seat .last-action { font-size: 12px; color: #8fc9e8; min-height: 14px; font-style: italic; }
 
+  .opponents {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 18px;
+  }
+  /* Compact sizing so up to 9 opponent seats still fit without the table
+     ballooning -- the lone "my-seat" below keeps full size. */
+  .opponents .seat { min-width: 76px; }
+  .opponents .card { width: 28px; height: 40px; font-size: 12px; }
+
   .cards { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
   .card {
     width: 38px; height: 54px;
@@ -133,13 +144,7 @@
 <div id="status" class="disconnected">connecting…</div>
 
 <div class="table">
-  <div class="seat" id="opponent-seat">
-    <div class="label" id="opponent-label">opponent</div>
-    <div class="cards" id="opponent-cards"></div>
-    <div class="stack" id="opponent-stack">--</div>
-    <div class="status" id="opponent-status"></div>
-    <div class="last-action" id="opponent-last-action"></div>
-  </div>
+  <div class="opponents" id="opponents"></div>
 
   <div class="board">
     <div class="round-state" id="round-state">--</div>
@@ -186,6 +191,23 @@ const RANK_LABEL = {
 
 let myHand = [];
 let latestState = null;
+
+// One real seat element per opponent, created lazily and reused across
+// renders -- seat count varies per table (2 to SEATS_PER_TABLE), so this
+// can't be the fixed single div it used to be.
+const opponentSeatEls = new Map();
+function getOpponentSeatEl(player) {
+  let el = opponentSeatEls.get(player);
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "seat";
+    el.innerHTML = '<div class="label"></div><div class="cards"></div>' +
+      '<div class="stack"></div><div class="status"></div><div class="last-action"></div>';
+    document.getElementById("opponents").appendChild(el);
+    opponentSeatEls.set(player, el);
+  }
+  return el;
+}
 
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
@@ -273,10 +295,11 @@ function showShowdownReveal(state) {
   const winners = sd.results.filter((r) => r.amount > 0).map((r) => r.player + " +" + r.amount);
   log(winners.length ? winners.join(", ") : "Hand ended.", false);
 
-  const oppPlayer = state.seats.find((s) => s.player !== PLAYER_ID)?.player;
-  if (oppPlayer && sd.hands[oppPlayer]) {
-    renderCards(document.getElementById("opponent-cards"), sd.hands[oppPlayer]);
-  }
+  state.seats.filter((s) => s.player !== PLAYER_ID).forEach((oppSeat) => {
+    if (sd.hands[oppSeat.player]) {
+      renderCards(getOpponentSeatEl(oppSeat.player).querySelector(".cards"), sd.hands[oppSeat.player]);
+    }
+  });
   if (sd.hands[PLAYER_ID]) {
     renderCards(document.getElementById("my-cards"), sd.hands[PLAYER_ID]);
   }
@@ -303,14 +326,23 @@ function showShowdownReveal(state) {
 
 function renderLiveState(state) {
   const mySeat = state.seats.find((s) => s.player === PLAYER_ID);
-  const oppSeat = state.seats.find((s) => s.player !== PLAYER_ID);
+  const opponentSeats = state.seats.filter((s) => s.player !== PLAYER_ID);
   const myTurn = state.current_turn === PLAYER_ID;
 
   if (state.game_over) {
-    const broke = state.seats.find((s) => s.stack <= 0);
-    const winner = state.seats.find((s) => s.stack > 0);
+    // Engine note: game_over fires as soon as ANY one seat hits 0 chips --
+    // at a 2-seat table that's exactly "the other seat wins", but at a
+    // bigger table it means the whole game stops the moment the FIRST
+    // player busts, even with several others still holding chips. That's
+    // a real limitation of the current engine (no elimination/continue
+    // handling yet for 3+ players), not something this UI can paper over --
+    // it's just reflected honestly here as "still in" vs "busted".
+    const survivors = state.seats.filter((s) => s.stack > 0);
+    const busted = state.seats.filter((s) => s.stack <= 0);
     document.getElementById("round-state").textContent = "game over";
-    log(winner ? `${winner.player} wins -- ${broke.player} is out of chips.` : "Game over.", false);
+    log(busted.length
+      ? `${busted.map((s) => s.player).join(", ")} out of chips -- ${survivors.map((s) => s.player).join(", ") || "no one"} still in.`
+      : "Game over.", false);
     btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = true;
     gameOverText.textContent = mySeat && mySeat.stack > 0 ? "YOU WIN!" : "YOU LOSE";
     gameOverBanner.style.display = "flex";
@@ -322,20 +354,22 @@ function renderLiveState(state) {
   document.getElementById("pot").textContent = "Pot: " + state.pot;
   renderCards(document.getElementById("community-cards"), state.community_cards);
 
-  if (oppSeat) {
-    document.getElementById("opponent-label").textContent = oppSeat.player + (oppSeat.is_bot ? " (bot)" : "");
-    document.getElementById("opponent-label").className = "label" + (state.current_turn === oppSeat.player ? " turn" : "");
-    document.getElementById("opponent-stack").textContent = "Stack: " + oppSeat.stack;
-    document.getElementById("opponent-status").textContent = oppSeat.is_folded ? "Folded" : (oppSeat.is_all_in ? "All in" : (oppSeat.bet_this_street ? "Bet: " + oppSeat.bet_this_street : ""));
-    // Opponent's hole cards are never sent to us -- always render face-down
+  opponentSeats.forEach((oppSeat) => {
+    const seatEl = getOpponentSeatEl(oppSeat.player);
+    const labelEl = seatEl.querySelector(".label");
+    labelEl.textContent = oppSeat.player + (oppSeat.is_bot ? " (bot)" : "");
+    labelEl.className = "label" + (state.current_turn === oppSeat.player ? " turn" : "");
+    seatEl.querySelector(".stack").textContent = "Stack: " + oppSeat.stack;
+    seatEl.querySelector(".status").textContent = oppSeat.is_folded ? "Folded" : (oppSeat.is_all_in ? "All in" : (oppSeat.bet_this_street ? "Bet: " + oppSeat.bet_this_street : ""));
+    // Opponents' hole cards are never sent to us -- always render face-down
     // if they still have a hand in this street (i.e. haven't folded).
-    renderCards(document.getElementById("opponent-cards"), [], oppSeat.is_folded ? 0 : 2);
+    renderCards(seatEl.querySelector(".cards"), [], oppSeat.is_folded ? 0 : 2);
 
-    const lastActionEl = document.getElementById("opponent-last-action");
+    const lastActionEl = seatEl.querySelector(".last-action");
     lastActionEl.textContent = (state.last_action && state.last_action.player === oppSeat.player)
       ? describeAction(state.last_action)
       : "";
-  }
+  });
 
   if (mySeat) {
     document.getElementById("my-label").className = "label" + (myTurn ? " turn" : "");

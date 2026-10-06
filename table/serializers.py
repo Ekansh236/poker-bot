@@ -31,6 +31,7 @@ def serialize_round(round_: Round) -> dict:
         "seats": [
             {
                 "player": seat.player,
+                "is_bot": seat.is_bot,
                 "stack": seat.stack,
                 "is_folded": seat.is_folded,
                 "is_all_in": seat.is_all_in,

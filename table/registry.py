@@ -7,7 +7,7 @@ from poker_engine.cards import Deck
 from poker_engine.round import Round
 from poker_engine.seat import Seat
 
-SEATS_PER_TABLE = 2
+SEATS_PER_TABLE = 10
 LOCK_TIMEOUT_SECONDS = 10  # safety valve -- auto-releases if a worker crashes mid-lock
 BOT_PLAYER_ID = "bot"
 
@@ -35,15 +35,19 @@ def claim_seat(round_: Round, player_id: str) -> Seat:
 
 
 def seat_bot_if_needed(round_: Round) -> None:
-    """Auto-fill any still-empty seat with a bot.
+    """Auto-fill every still-empty seat with a bot.
 
-    Simplest possible matchmaking for a heads-up-only table: once a human
-    claims one seat, whatever's left over becomes a bot immediately, so
-    every table is always playable with no separate lobby/invite flow.
+    Simplest possible matchmaking: once a human claims one seat, whatever's
+    left over becomes bots immediately, so every table is always playable
+    with no separate lobby/invite flow. Each bot gets a name unique to its
+    seat index -- claim_seat() resolves a player_id to the first seat whose
+    .player matches, so every bot sharing the same literal "bot" name (fine
+    when at most one existed, at the old 2-seat table cap) would make every
+    bot_decide_task() call for seat 2+ silently resolve back to seat 1.
     """
-    for seat in round_.seats:
+    for index, seat in enumerate(round_.seats):
         if seat.player is None:
-            seat.player = BOT_PLAYER_ID
+            seat.player = f"{BOT_PLAYER_ID}{index}"
             seat.is_bot = True
 
 

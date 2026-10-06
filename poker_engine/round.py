@@ -65,17 +65,54 @@ class Round:
         if RoundState.PRE_FLOP != self.current_round_state:
             raise ValueError("Hole cards can only be dealt during the PRE_FLOP round state.")
 
-        # Button posts the small blind, the other seat posts the big blind.
-        small_blind_posted = self.seats[self.button_index].put_in_pot(self.SMALL_BLIND)
-        big_blind_posted = self.seats[self._non_button_index()].put_in_pot(self.BIG_BLIND)
-        self.pot += small_blind_posted + big_blind_posted
+        # TODO(human): Blind posting and the preflop turn order both change
+        # once len(self.seats) can be more than 2 -- heads-up and 3+-handed
+        # follow genuinely different rules, not just "more seats":
+        #
+        # Heads-up (2 seats) -- today's behavior, must still work:
+        #   - The button posts the small blind; the other seat posts the
+        #     big blind.
+        #   - The button acts FIRST preflop (it's the only seat that can,
+        #     besides the big blind who's already posted).
+        #
+        if len(self.seats) == 2:
+            small_blind_posted = self.seats[self.button_index].put_in_pot(self.SMALL_BLIND)
+            big_blind_posted = self.seats[self._non_button_index()].put_in_pot(self.BIG_BLIND)
+            self.pot += small_blind_posted + big_blind_posted
+            self.current_turn_index = self.button_index  # Button acts first preflop
+        # 3+ handed:
+        #   - The button posts NOTHING.
+        #   - The seat immediately after the button posts the small blind;
+        #     the seat after THAT posts the big blind.
+        #   - Action starts with the seat after the big blind, and wraps
+        #     all the way around so the button acts LAST preflop.
+        #
+        else:
+            small_blind_posted = self.seats[self._non_button_index()].put_in_pot(self.SMALL_BLIND)
+            big_blind_posted = self.seats[(self.button_index + 2) % len(self.seats)].put_in_pot(self.BIG_BLIND)
+            self.pot += small_blind_posted + big_blind_posted
+        # _non_button_index() already computes "button_index + 1" generically
+            self.current_turn_index = (self.button_index + 3) % len(self.seats)
+        # -- that's exactly the small-blind seat in the 3+ case, and happens
+        # to equal the only other seat in the heads-up case. Decide how to
+        # get from there to the big-blind seat and the first-to-act seat for
+        # an arbitrary seat count (modular arithmetic on len(self.seats)),
+        # and whether heads-up needs its own branch or falls out of the same
+        # formula as a special case of N=2.
+        #
+        # Postflop turn order needs NO changes -- _non_button_index() as the
+        # first seat to act after the button is already the correct general
+        # rule at any table size, not a heads-up-specific shortcut.
+        #
+        # Must still: post exactly two blinds total (not scaled by seat
+        # count), add them to self.pot, and set self.current_turn_index to
+        # whichever seat actually acts first for the seat count in play.
 
+        self.current_bet_to_match = self.BIG_BLIND  # Always BIG_BLIND regardless of seat count.
         for seat in self.seats:
             seat.cards = (self.deck.deal_card(), self.deck.deal_card())
             seat.has_acted_this_street = False  # Reset action status for the new hand
-        self.current_bet_to_match = self.BIG_BLIND  # Reset the current bet to match for the new hand
         self.current_round_state = RoundState.FLOP  # Transition to FLOP state after dealing hole cards
-        self.current_turn_index = self.button_index  # Button acts first preflop
 
     def start_new_hand(self):
         """Reset this Round in place and deal a fresh hand.

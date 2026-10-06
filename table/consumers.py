@@ -33,6 +33,15 @@ class TableConsumer(AsyncWebsocketConsumer):
                 seat.cards is None for seat in round_.seats
             ):
                 round_.deal_hole_cards()
+                # At a 2-seat table the button (first to act preflop) was
+                # always whichever human just connected and claimed seat 0 --
+                # this dispatch was never needed here. With more seats,
+                # first-to-act preflop can land on a bot with no human action
+                # anywhere to trigger it otherwise, same gap bot_decide_task's
+                # own re-dispatch exists to cover mid-hand.
+                first_to_act = round_.seats[round_.current_turn_index]
+                if first_to_act.is_bot:
+                    bot_decide_task.delay(self.table_id, first_to_act.player)
 
             state_payload = serialize_round(round_)
             # last_showdown is a one-shot signal meant only for the single
