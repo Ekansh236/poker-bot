@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Poker -- {{ table_id }}</title>
 <style>
   :root { color-scheme: dark; }
@@ -15,70 +16,205 @@
     flex-direction: column;
     align-items: center;
     min-height: 100vh;
-    padding: 16px;
+    padding: 12px 12px 24px;
   }
-  h1 { font-size: 16px; font-weight: 500; opacity: 0.8; margin: 0 0 4px; }
-  #status { font-size: 12px; opacity: 0.6; margin-bottom: 16px; }
+
+  .topbar {
+    width: 100%;
+    max-width: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .topbar h1 { font-size: 14px; font-weight: 500; opacity: 0.75; margin: 0; }
+  #status { font-size: 11px; opacity: 0.65; }
   #status.connected { color: #6fdc8c; }
   #status.disconnected { color: #e06c6c; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
 
-  .table {
+  #btn-invite {
+    background: #1a5c37; color: #eee; border: 1px solid #2f8a54;
+    border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+  }
+  #btn-invite:hover { background: #237046; }
+
+  #invite-box {
+    display: none;
     width: 100%;
-    max-width: 520px;
+    max-width: 760px;
     background: #0f5132;
-    border: 6px solid #6b4423;
-    border-radius: 220px / 90px;
-    padding: 28px 24px;
+    border: 1px solid #ffd54a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #invite-box.open { display: flex; }
+  #invite-link {
+    flex: 1;
+    min-width: 180px;
+    background: #0b2e1c;
+    border: 1px solid #2f8a54;
+    border-radius: 5px;
+    padding: 6px 8px;
+    color: #cde9d8;
+    font-size: 12px;
+  }
+  #btn-copy-invite {
+    background: #ffd54a; color: #1a1a1a; border: none; font-weight: 700;
+    border-radius: 5px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+  }
+
+  /* -- "what's going on" banner -- */
+  #event-banner {
+    width: 100%;
+    max-width: 760px;
+    text-align: center;
+    font-size: 13px;
+    min-height: 20px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    background: rgba(0,0,0,0.18);
+    opacity: 0.9;
+  }
+  #event-banner.error { color: #ff8a8a; background: rgba(224,108,108,0.15); }
+
+  /* -- the oval table -- */
+  .table-wrap {
+    width: 100%;
+    max-width: 760px;
+    aspect-ratio: 16 / 11;
+    position: relative;
+    margin-top: 6px;
+  }
+  .table-oval {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 42%, #156b3f 0%, #0f5132 65%, #0c4028 100%);
+    border: 10px solid #6b4423;
+    border-radius: 50%;
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.45), 0 10px 30px rgba(0,0,0,0.5);
+  }
+
+  .center-content {
+    position: absolute;
+    left: 50%; top: 46%;
+    transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 18px;
+    gap: 6px;
+    width: 72%;
+  }
+  .street-banner {
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+  .pot-display {
+    font-size: 17px;
+    font-weight: 700;
+    color: #ffd54a;
   }
 
-  .seat { text-align: center; }
-  .seat .label { font-size: 13px; opacity: 0.75; }
-  .seat .label.turn { color: #ffd54a; font-weight: 600; opacity: 1; }
-  .seat .stack { font-size: 15px; margin-top: 2px; }
-  .seat .status { font-size: 12px; color: #e0a86c; min-height: 14px; }
-  .seat .last-action { font-size: 12px; color: #8fc9e8; min-height: 14px; font-style: italic; }
-
-  .opponents {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px 18px;
-  }
-  /* Compact sizing so up to 9 opponent seats still fit without the table
-     ballooning -- the lone "my-seat" below keeps full size. */
-  .opponents .seat { min-width: 76px; }
-  .opponents .card { width: 28px; height: 40px; font-size: 12px; }
-
-  .cards { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
+  .cards { display: flex; gap: 5px; justify-content: center; }
   .card {
-    width: 38px; height: 54px;
+    width: 34px; height: 48px;
     background: #fdfdfd;
     border-radius: 5px;
     display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 15px;
+    font-weight: 700; font-size: 13px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    flex: 0 0 auto;
   }
   .card.red { color: #c0392b; }
   .card.black { color: #222; }
   .card.hidden { background: #2a2a2a; color: transparent; }
 
-  .board { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-  .pot { font-size: 14px; opacity: 0.85; }
-  .round-state { font-size: 11px; letter-spacing: 1px; opacity: 0.6; text-transform: uppercase; }
+  /* -- opponent seats, positioned around the rail via JS left/top -- */
+  .seat {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 96px;
+    text-align: center;
+    background: rgba(8, 30, 20, 0.82);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 7px 6px 6px;
+    transition: box-shadow 0.2s, border-color 0.2s;
+  }
+  .seat.active-turn {
+    border-color: #ffd54a;
+    box-shadow: 0 0 0 3px rgba(255,213,74,0.45), 0 0 16px 3px rgba(255,213,74,0.5);
+    animation: seatPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes seatPulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(255,213,74,0.45), 0 0 16px 3px rgba(255,213,74,0.5); }
+    50% { box-shadow: 0 0 0 3px rgba(255,213,74,0.75), 0 0 22px 6px rgba(255,213,74,0.75); }
+  }
+  .seat .label { font-size: 12px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seat.active-turn .label { color: #ffd54a; font-weight: 700; opacity: 1; }
+  .seat .stack { font-size: 12px; margin-top: 2px; opacity: 0.8; }
+  .seat .cards { margin-top: 4px; transform: scale(0.8); transform-origin: center; }
+  .seat .status-line { min-height: 14px; margin-top: 3px; }
+
+  .action-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 10px;
+    color: #1a1a1a;
+  }
+  .action-badge.fold { background: #8a8a8a; color: #eee; }
+  .action-badge.check { background: #6fb8dc; }
+  .action-badge.call { background: #6fdc8c; }
+  .action-badge.raise { background: #ff9d4a; }
+  .action-badge.allin { background: #ff5a5a; color: #fff; }
+
+  /* -- my seat, anchored below the table -- */
+  .my-seat-wrap {
+    width: 100%;
+    max-width: 760px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 14px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1.5px solid rgba(255,255,255,0.12);
+    background: rgba(8, 30, 20, 0.5);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .my-seat-wrap.active-turn {
+    border-color: #ffd54a;
+    box-shadow: 0 0 0 3px rgba(255,213,74,0.4), 0 0 18px 4px rgba(255,213,74,0.45);
+  }
+  .my-seat-wrap .label { font-size: 13px; opacity: 0.85; }
+  .my-seat-wrap.active-turn .label { color: #ffd54a; font-weight: 700; opacity: 1; }
+  .my-seat-wrap .stack { font-size: 15px; margin-top: 2px; }
+  .my-seat-wrap .status-line { min-height: 16px; margin-top: 4px; }
+  .my-seat-wrap .cards { margin-top: 8px; }
+  .my-seat-wrap .card { width: 40px; height: 56px; font-size: 15px; }
 
   .actions {
-    margin-top: 20px;
+    margin-top: 16px;
     display: flex;
     gap: 8px;
     align-items: center;
     flex-wrap: wrap;
     justify-content: center;
   }
-  button {
+  button.action-btn {
     background: #1a5c37;
     color: #eee;
     border: 1px solid #2f8a54;
@@ -87,9 +223,9 @@
     font-size: 14px;
     cursor: pointer;
   }
-  button:disabled { opacity: 0.35; cursor: default; }
-  button:not(:disabled):hover { background: #237046; }
-  button.fold { border-color: #a04040; }
+  button.action-btn:disabled { opacity: 0.35; cursor: default; }
+  button.action-btn:not(:disabled):hover { background: #237046; }
+  button.action-btn.fold { border-color: #a04040; }
   input[type=number] {
     width: 80px;
     padding: 9px 8px;
@@ -100,9 +236,9 @@
   }
 
   #log {
-    max-width: 520px;
+    max-width: 760px;
     width: 100%;
-    margin-top: 16px;
+    margin-top: 10px;
     font-size: 12px;
     opacity: 0.6;
     text-align: center;
@@ -134,38 +270,61 @@
     font-size: 16px;
     font-weight: 700;
     padding: 12px 30px;
+    border-radius: 6px;
+    cursor: pointer;
   }
   .btn-prominent:hover { background: #ffe07a; }
+
+  @media (max-width: 480px) {
+    .seat { width: 72px; padding: 5px 4px 4px; }
+    .seat .label { font-size: 10px; }
+    .seat .stack { font-size: 10px; }
+    .seat .card { width: 20px; height: 28px; }
+    .pot-display { font-size: 15px; }
+  }
 </style>
 </head>
 <body>
 
-<h1>Table "{{ table_id }}" -- playing as {{ player_id }}</h1>
-<div id="status" class="disconnected">connecting…</div>
-
-<div class="table">
-  <div class="opponents" id="opponents"></div>
-
-  <div class="board">
-    <div class="round-state" id="round-state">--</div>
-    <div class="cards" id="community-cards"></div>
-    <div class="pot" id="pot">Pot: --</div>
-  </div>
-
-  <div class="seat" id="my-seat">
-    <div class="status" id="my-status"></div>
-    <div class="stack" id="my-stack">--</div>
-    <div class="cards" id="my-cards"></div>
-    <div class="label" id="my-label">you</div>
+<div class="topbar">
+  <h1>Table "{{ table_id }}" &middot; playing as {{ player_id }}</h1>
+  <div class="topbar-right">
+    <button id="btn-invite">Invite</button>
+    <div id="status" class="disconnected">connecting&hellip;</div>
   </div>
 </div>
 
+<div id="invite-box">
+  <span>Share this link:</span>
+  <input id="invite-link" type="text" readonly>
+  <button id="btn-copy-invite">Copy</button>
+</div>
+
+<div id="event-banner">Connecting to the table&hellip;</div>
+
+<div class="table-wrap">
+  <div class="table-oval"></div>
+  <div id="opponents"></div>
+  <div class="center-content">
+    <div class="street-banner" id="round-state">--</div>
+    <div class="cards" id="community-cards"></div>
+    <div class="pot-display" id="pot">Pot: --</div>
+  </div>
+</div>
+
+<div class="my-seat-wrap" id="my-seat">
+  <div class="label" id="my-label">you</div>
+  <div class="stack" id="my-stack">--</div>
+  <div class="status-line" id="my-status"></div>
+  <div class="cards" id="my-cards"></div>
+</div>
+
 <div class="actions">
-  <button class="fold" id="btn-fold" disabled>Fold</button>
-  <button id="btn-check-call" disabled>Check</button>
+  <button class="action-btn fold" id="btn-fold" disabled>Fold</button>
+  <button class="action-btn" id="btn-check-call" disabled>Check</button>
   <input type="number" id="raise-amount" min="1" placeholder="amount">
-  <button id="btn-raise" disabled>Raise</button>
-  <button id="btn-continue" style="display: none;">Continue</button>
+  <button class="action-btn" id="btn-raise" disabled>Raise</button>
+  <button class="action-btn" id="btn-continue" style="display: none;">Continue</button>
 </div>
 
 <div id="game-over-banner">
@@ -174,7 +333,7 @@
 </div>
 
 <div class="actions" style="margin-top: 8px;">
-  <button id="btn-restart" style="opacity: 0.6; font-size: 12px; padding: 6px 12px;">Restart (500 chips)</button>
+  <button class="action-btn" id="btn-restart" style="opacity: 0.6; font-size: 12px; padding: 6px 12px;">Restart (500 chips)</button>
 </div>
 
 <div id="log"></div>
@@ -192,25 +351,9 @@ const RANK_LABEL = {
 let myHand = [];
 let latestState = null;
 
-// One real seat element per opponent, created lazily and reused across
-// renders -- seat count varies per table (2 to SEATS_PER_TABLE), so this
-// can't be the fixed single div it used to be.
-const opponentSeatEls = new Map();
-function getOpponentSeatEl(player) {
-  let el = opponentSeatEls.get(player);
-  if (!el) {
-    el = document.createElement("div");
-    el.className = "seat";
-    el.innerHTML = '<div class="label"></div><div class="cards"></div>' +
-      '<div class="stack"></div><div class="status"></div><div class="last-action"></div>';
-    document.getElementById("opponents").appendChild(el);
-    opponentSeatEls.set(player, el);
-  }
-  return el;
-}
-
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
+const eventBanner = document.getElementById("event-banner");
 const btnFold = document.getElementById("btn-fold");
 const btnCheckCall = document.getElementById("btn-check-call");
 const btnRaise = document.getElementById("btn-raise");
@@ -220,10 +363,19 @@ const btnRestart = document.getElementById("btn-restart");
 const gameOverBanner = document.getElementById("game-over-banner");
 const gameOverText = document.getElementById("game-over-text");
 const btnPlayAgain = document.getElementById("btn-play-again");
+const mySeatWrap = document.getElementById("my-seat");
 
 function log(message, isError) {
   logEl.textContent = message;
   logEl.className = isError ? "error" : "";
+}
+
+// The event banner is the "what's currently going on" strip -- separate
+// from #log (which already existed for errors) so a real event always
+// reads clearly even while an error is also showing below.
+function announce(message, isError) {
+  eventBanner.textContent = message;
+  eventBanner.className = isError ? "error" : "";
 }
 
 function cardEl(card, hidden) {
@@ -258,6 +410,57 @@ function describeAction(lastAction) {
   }
 }
 
+function actionBadgeEl(lastAction) {
+  const el = document.createElement("span");
+  const cls = lastAction.is_all_in ? "allin" : lastAction.action;
+  el.className = "action-badge " + cls;
+  el.textContent = lastAction.is_all_in ? "ALL IN" : lastAction.action.toUpperCase() +
+    (lastAction.action === "raise" ? " " + lastAction.bet_this_street : "");
+  return el;
+}
+
+// One real seat element per opponent, created lazily and reused across
+// renders -- seat count varies per table, so this can't be a fixed div.
+const opponentSeatEls = new Map();
+function getOpponentSeatEl(player) {
+  let el = opponentSeatEls.get(player);
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "seat";
+    el.innerHTML = '<div class="label"></div><div class="stack"></div>' +
+      '<div class="cards"></div><div class="status-line"></div>';
+    document.getElementById("opponents").appendChild(el);
+    opponentSeatEls.set(player, el);
+  }
+  return el;
+}
+
+// Places every OTHER seat evenly around the table's rail, in actual seat
+// order starting right after me (not connection order) -- so position at
+// the table stays stable and visually matches turn-order rotation. A ~100
+// degree arc at the bottom is left empty; that's where "my seat" already
+// sits, fixed below the oval.
+function positionOpponentSeats(allSeats) {
+  const myIndex = allSeats.findIndex((s) => s.player === PLAYER_ID);
+  if (myIndex === -1) return;
+  const n = allSeats.length;
+  const others = [];
+  for (let offset = 1; offset < n; offset++) {
+    others.push(allSeats[(myIndex + offset) % n]);
+  }
+  const usableStart = 230, usableSpan = 260; // degrees; 0 = top, clockwise
+  const radiusX = 44, radiusY = 40;
+  others.forEach((seat, i) => {
+    const angleDeg = usableStart + (usableSpan * (i + 1)) / (others.length + 1);
+    const rad = (angleDeg * Math.PI) / 180;
+    const x = 50 + radiusX * Math.sin(rad);
+    const y = 50 - radiusY * Math.cos(rad);
+    const el = getOpponentSeatEl(seat.player);
+    el.style.left = x + "%";
+    el.style.top = y + "%";
+  });
+}
+
 let awaitingContinue = false;
 
 function renderState(state) {
@@ -267,10 +470,10 @@ function renderState(state) {
   // street AND starts the next hand within a single server-side call, so
   // without this the board/result would never be visible: by the time we
   // render, Round has already moved on. Show the resolved board + result
-  // first, frozen (including the opponent's revealed hand on a real
-  // showdown -- never on a fold-win, same as a real table mucking a folded
-  // hand), and wait for the player to click Continue before revealing the
-  // actual (already-arrived) new-hand state.
+  // first, frozen (including opponents' revealed hands on a real showdown
+  // -- never on a fold-win, same as a real table mucking a folded hand),
+  // and wait for the player to click Continue before revealing the actual
+  // (already-arrived) new-hand state.
   if (state.last_showdown) {
     showShowdownReveal(state);
     return;
@@ -293,7 +496,7 @@ function showShowdownReveal(state) {
   document.getElementById("round-state").textContent = "showdown";
   document.getElementById("pot").textContent = "Pot: --";
   const winners = sd.results.filter((r) => r.amount > 0).map((r) => r.player + " +" + r.amount);
-  log(winners.length ? winners.join(", ") : "Hand ended.", false);
+  announce(winners.length ? winners.join(", ") + " won the hand" : "Hand ended.", false);
 
   state.seats.filter((s) => s.player !== PLAYER_ID).forEach((oppSeat) => {
     if (sd.hands[oppSeat.player]) {
@@ -329,19 +532,18 @@ function renderLiveState(state) {
   const opponentSeats = state.seats.filter((s) => s.player !== PLAYER_ID);
   const myTurn = state.current_turn === PLAYER_ID;
 
+  positionOpponentSeats(state.seats);
+
   if (state.game_over) {
-    // Engine note: game_over fires as soon as ANY one seat hits 0 chips --
-    // at a 2-seat table that's exactly "the other seat wins", but at a
-    // bigger table it means the whole game stops the moment the FIRST
-    // player busts, even with several others still holding chips. That's
-    // a real limitation of the current engine (no elimination/continue
-    // handling yet for 3+ players), not something this UI can paper over --
-    // it's just reflected honestly here as "still in" vs "busted".
+    // Engine note: game_over only fires once fewer than 2 seats still have
+    // chips -- busted seats are excluded from every hand after the one
+    // that busted them, so this really does mean the game is over, not
+    // just that one player ran out.
     const survivors = state.seats.filter((s) => s.stack > 0);
     const busted = state.seats.filter((s) => s.stack <= 0);
     document.getElementById("round-state").textContent = "game over";
-    log(busted.length
-      ? `${busted.map((s) => s.player).join(", ")} out of chips -- ${survivors.map((s) => s.player).join(", ") || "no one"} still in.`
+    announce(busted.length
+      ? `${busted.map((s) => s.player).join(", ")} out of chips -- ${survivors.map((s) => s.player).join(", ") || "no one"} left standing.`
       : "Game over.", false);
     btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = true;
     gameOverText.textContent = mySeat && mySeat.stack > 0 ? "YOU WIN!" : "YOU LOSE";
@@ -354,28 +556,53 @@ function renderLiveState(state) {
   document.getElementById("pot").textContent = "Pot: " + state.pot;
   renderCards(document.getElementById("community-cards"), state.community_cards);
 
+  if (state.last_action) {
+    const actor = state.last_action.player;
+    announce((actor === PLAYER_ID ? "You" : actor) + " " + describeAction(state.last_action).toLowerCase() +
+      (state.current_turn ? ` -- ${state.current_turn === PLAYER_ID ? "your" : state.current_turn + "'s"} turn now` : ""), false);
+  } else if (myTurn) {
+    announce("Your turn.", false);
+  } else if (state.current_turn) {
+    announce(`${state.current_turn}'s turn.`, false);
+  }
+
   opponentSeats.forEach((oppSeat) => {
     const seatEl = getOpponentSeatEl(oppSeat.player);
-    const labelEl = seatEl.querySelector(".label");
-    labelEl.textContent = oppSeat.player + (oppSeat.is_bot ? " (bot)" : "");
-    labelEl.className = "label" + (state.current_turn === oppSeat.player ? " turn" : "");
+    const isActive = state.current_turn === oppSeat.player;
+    seatEl.classList.toggle("active-turn", isActive);
+    seatEl.querySelector(".label").textContent = oppSeat.player + (oppSeat.is_bot ? " (bot)" : "");
     seatEl.querySelector(".stack").textContent = "Stack: " + oppSeat.stack;
-    seatEl.querySelector(".status").textContent = oppSeat.is_folded ? "Folded" : (oppSeat.is_all_in ? "All in" : (oppSeat.bet_this_street ? "Bet: " + oppSeat.bet_this_street : ""));
     // Opponents' hole cards are never sent to us -- always render face-down
-    // if they still have a hand in this street (i.e. haven't folded).
-    renderCards(seatEl.querySelector(".cards"), [], oppSeat.is_folded ? 0 : 2);
+    // if they still have a hand in this street (i.e. haven't folded/busted).
+    renderCards(seatEl.querySelector(".cards"), [], (oppSeat.is_folded || oppSeat.stack <= 0) ? 0 : 2);
 
-    const lastActionEl = seatEl.querySelector(".last-action");
-    lastActionEl.textContent = (state.last_action && state.last_action.player === oppSeat.player)
-      ? describeAction(state.last_action)
-      : "";
+    const statusLine = seatEl.querySelector(".status-line");
+    statusLine.innerHTML = "";
+    if (oppSeat.stack <= 0) {
+      statusLine.textContent = "Out";
+    } else if (oppSeat.is_folded) {
+      statusLine.textContent = "Folded";
+    } else if (state.last_action && state.last_action.player === oppSeat.player) {
+      statusLine.appendChild(actionBadgeEl(state.last_action));
+    } else if (oppSeat.bet_this_street) {
+      statusLine.textContent = "Bet: " + oppSeat.bet_this_street;
+    }
   });
 
   if (mySeat) {
-    document.getElementById("my-label").className = "label" + (myTurn ? " turn" : "");
+    mySeatWrap.classList.toggle("active-turn", myTurn);
     document.getElementById("my-stack").textContent = "Stack: " + mySeat.stack;
-    document.getElementById("my-status").textContent = mySeat.is_folded ? "Folded" : (mySeat.is_all_in ? "All in" : (mySeat.bet_this_street ? "Bet: " + mySeat.bet_this_street : ""));
     renderCards(document.getElementById("my-cards"), myHand);
+
+    const myStatusLine = document.getElementById("my-status");
+    myStatusLine.innerHTML = "";
+    if (mySeat.is_folded) {
+      myStatusLine.textContent = "Folded";
+    } else if (state.last_action && state.last_action.player === PLAYER_ID) {
+      myStatusLine.appendChild(actionBadgeEl(state.last_action));
+    } else if (mySeat.bet_this_street) {
+      myStatusLine.textContent = "Bet: " + mySeat.bet_this_street;
+    }
 
     const amountToCall = state.current_bet_to_match - mySeat.bet_this_street;
     const canAct = myTurn && !mySeat.is_folded && !mySeat.is_all_in;
@@ -457,6 +684,23 @@ function doRestart() {
 }
 btnRestart.addEventListener("click", doRestart);
 btnPlayAgain.addEventListener("click", doRestart);
+
+const inviteBox = document.getElementById("invite-box");
+const inviteLink = document.getElementById("invite-link");
+const btnInvite = document.getElementById("btn-invite");
+const btnCopyInvite = document.getElementById("btn-copy-invite");
+inviteLink.value = location.origin + "/join/" + TABLE_ID + "/";
+btnInvite.addEventListener("click", () => inviteBox.classList.toggle("open"));
+btnCopyInvite.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(inviteLink.value);
+    btnCopyInvite.textContent = "Copied!";
+  } catch (e) {
+    inviteLink.select();
+    btnCopyInvite.textContent = "Select & copy";
+  }
+  setTimeout(() => { btnCopyInvite.textContent = "Copy"; }, 1500);
+});
 
 connect();
 </script>

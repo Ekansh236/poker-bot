@@ -1,0 +1,31 @@
+{% extends "table/base.html" %}
+{% block title %}Create Game{% endblock %}
+{% block extra_style %}
+  input[type=range] { width: 100%; margin-top: 6px; accent-color: #ffd54a; }
+  .bot-count-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .bot-count-value { font-size: 20px; font-weight: 700; color: #ffd54a; }
+{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Create Game</h1>
+  <p class="subtitle">Pick how many bots fill the rest of the table.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" action="{% url 'create_game' %}">
+    {% csrf_token %}
+    <label for="player_id">Your name</label>
+    <input type="text" id="player_id" name="player_id" placeholder="e.g. alice" required autofocus>
+
+    <div style="margin-top: 16px;">
+      <div class="bot-count-row">
+        <label for="num_bots">Bots</label>
+        <span class="bot-count-value" id="num_bots_display">{{ num_bots }}</span>
+      </div>
+      <input type="range" id="num_bots" name="num_bots" min="1" max="10" value="{{ num_bots }}"
+             oninput="document.getElementById('num_bots_display').textContent = this.value">
+    </div>
+
+    <button type="submit" class="btn-prominent" style="margin-top: 20px;">Create &amp; Get Link</button>
+  </form>
+  <p class="link-back"><a href="{% url 'lobby' %}">&larr; back</a></p>
+</div>
+{% endblock %}

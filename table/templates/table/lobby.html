@@ -1,0 +1,10 @@
+{% extends "table/base.html" %}
+{% block title %}Poker{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>&spades; Poker</h1>
+  <p class="subtitle">Start a new table or join one a friend sent you.</p>
+  <a class="btn btn-prominent" href="{% url 'create_game' %}">Create Game</a>
+  <a class="btn" href="{% url 'join_game' %}">Join Game</a>
+</div>
+{% endblock %}

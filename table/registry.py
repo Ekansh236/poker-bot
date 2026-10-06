@@ -16,11 +16,21 @@ BOT_PLAYER_ID = "bot"
 redis_client = redis.Redis(host='127.0.0.1', port=6379, db=0)
 
 
-def _new_round() -> Round:
+def _new_round(num_seats: int = SEATS_PER_TABLE) -> Round:
     deck = Deck()
     deck.shuffle()
-    seats = [Seat(None, None) for _ in range(SEATS_PER_TABLE)]
+    seats = [Seat(None, None) for _ in range(num_seats)]
     return Round(seats, deck)
+
+
+def create_table(table_id: str, num_seats: int) -> None:
+    """Pre-create a table with a chosen seat count, before anyone connects.
+
+    Without this, every table falls back to SEATS_PER_TABLE the first time
+    anyone connects (see locked_round()) -- this lets a game's creator pick
+    how many bots they actually want instead.
+    """
+    redis_client.set(f"round:{table_id}", pickle.dumps(_new_round(num_seats)))
 
 
 def claim_seat(round_: Round, player_id: str) -> Seat:

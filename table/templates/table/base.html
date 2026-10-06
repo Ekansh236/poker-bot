@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Poker{% endblock %}</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0b3d24;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .card {
+    width: 100%;
+    max-width: 380px;
+    background: #0f5132;
+    border: 1px solid #2f8a54;
+    border-radius: 14px;
+    padding: 28px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    text-align: center;
+  }
+  p.subtitle {
+    font-size: 13px;
+    opacity: 0.7;
+    text-align: center;
+    margin: 0 0 8px;
+  }
+  label {
+    font-size: 13px;
+    opacity: 0.85;
+  }
+  input[type=text], input[type=number] {
+    width: 100%;
+    padding: 11px 10px;
+    border-radius: 7px;
+    border: 1px solid #2f8a54;
+    background: #0b2e1c;
+    color: #eee;
+    font-size: 15px;
+    margin-top: 4px;
+  }
+  input:focus { outline: 2px solid #ffd54a; }
+  button, .btn {
+    display: block;
+    width: 100%;
+    background: #1a5c37;
+    color: #eee;
+    border: 1px solid #2f8a54;
+    border-radius: 8px;
+    padding: 13px 16px;
+    font-size: 15px;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+  }
+  button:hover, .btn:hover { background: #237046; }
+  .btn-prominent {
+    background: #ffd54a;
+    color: #1a1a1a;
+    border: none;
+    font-weight: 700;
+  }
+  .btn-prominent:hover { background: #ffe07a; }
+  .error {
+    color: #ff8a8a;
+    font-size: 13px;
+    text-align: center;
+    margin: 0;
+  }
+  .link-back {
+    text-align: center;
+    font-size: 13px;
+    opacity: 0.7;
+    margin-top: 6px;
+  }
+  .link-back a { color: #8fc9e8; }
+  {% block extra_style %}{% endblock %}
+</style>
+</head>
+<body>
+{% block content %}{% endblock %}
+</body>
+</html>
