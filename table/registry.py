@@ -31,6 +31,18 @@ def claim_seat(round_: Round, player_id: str) -> Seat:
         if seat.player is None:
             seat.player = player_id
             return seat
+    # Before a hand is dealt, every open seat still gets bot-filled
+    # immediately on the FIRST connection (see seat_bot_if_needed) so a
+    # lone player can start right away -- which otherwise leaves no room
+    # for a second real player to ever join afterward. Safe to bump a bot
+    # back out only while nothing's been dealt yet; once cards are out,
+    # a bot's stack/position is live game state, not a placeholder.
+    if all(seat.cards is None for seat in round_.seats):
+        for seat in round_.seats:
+            if seat.is_bot:
+                seat.player = player_id
+                seat.is_bot = False
+                return seat
     raise ValueError(f"Table is full -- no open seat for {player_id}.")
 
 

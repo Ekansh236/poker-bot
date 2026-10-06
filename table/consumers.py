@@ -22,27 +22,28 @@ class TableConsumer(AsyncWebsocketConsumer):
         # last open seat is the same lost-update risk as betting actions),
         # so it must happen under the lock too -- see registry.locked_round.
         with registry.locked_round(self.table_id) as round_:
-            registry.claim_seat(round_, self.player_id)
+            try:
+                registry.claim_seat(round_, self.player_id)
+            except ValueError as e:
+                # Genuinely full (a hand is already in progress, so
+                # claim_seat() had no bot left it could safely bump) --
+                # reject the connection with a real message instead of
+                # crashing the ASGI handler with an unhandled exception.
+                await self.accept()
+                await self.send(text_data=json.dumps({"error": str(e)}))
+                await self.close()
+                return
+            # Bot-fill for display immediately (harmless and reversible --
+            # claim_seat() will happily bump an undealt bot back out for the
+            # next real player to connect), but do NOT auto-deal here. A
+            # brand-new table used to deal itself the instant every seat was
+            # filled, which was fine at 2 seats (exactly one human, ever) but
+            # meant the FIRST connection already locked in every other seat
+            # as a bot before a second real player ever got a chance to
+            # join. Dealing now only happens from an explicit "restart"
+            # message (see below) -- that's this table's actual "start the
+            # game" trigger, giving every real player a window to join first.
             registry.seat_bot_if_needed(round_)
-
-            # A brand-new table has no hand in progress yet -- nothing
-            # auto-deals the very first hand (see README's Known gaps).
-            # Once every seat is filled and no one has cards, deal one now
-            # so a freshly opened table is immediately playable.
-            if all(seat.player is not None for seat in round_.seats) and all(
-                seat.cards is None for seat in round_.seats
-            ):
-                round_.deal_hole_cards()
-                # At a 2-seat table the button (first to act preflop) was
-                # always whichever human just connected and claimed seat 0 --
-                # this dispatch was never needed here. With more seats,
-                # first-to-act preflop can land on a bot with no human action
-                # anywhere to trigger it otherwise, same gap bot_decide_task's
-                # own re-dispatch exists to cover mid-hand.
-                first_to_act = round_.seats[round_.current_turn_index]
-                if first_to_act.is_bot:
-                    bot_decide_task.delay(self.table_id, first_to_act.player)
-
             state_payload = serialize_round(round_)
             # last_showdown is a one-shot signal meant only for the single
             # broadcast immediately after a hand resolves -- it isn't
