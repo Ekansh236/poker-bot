@@ -207,11 +207,11 @@
     margin-top: 4px;
     transform: scale(0.8);
     transform-origin: center;
-    transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
   }
-  /* "Whoever's turn it is, their cards enlarge" -- opponents' cards are
-     always face-down, but popping them up is still a clear live cue. */
-  .seat.active-turn .cards { transform: scale(1.05); }
+  /* Opponents' cards deliberately do NOT enlarge on their turn -- with
+     several bots acting every ~150ms, that reads as constant flicker
+     rather than a meaningful cue. The seat's glow/pulse border above is
+     enough to show whose turn it is; the enlarge is reserved for mine. */
   .seat .status-line { min-height: 14px; margin-top: 3px; }
 
   .winner-glow {
@@ -462,13 +462,46 @@ function cardEl(card, hidden) {
   return el;
 }
 
+function cardKey(c) { return c.rank + "_" + c.suit; }
+
+function appendCardWithDelay(container, card, staggerIndex) {
+  const el = cardEl(card, false);
+  if (staggerIndex) el.style.animationDelay = (staggerIndex * 90) + "ms";
+  container.appendChild(el);
+}
+
+// Only animates cards that are genuinely NEW -- re-rendering the exact
+// same hand on every broadcast (which happens on every action, by anyone)
+// used to wipe and recreate every card each time, replaying the "dealt
+// in" animation constantly instead of just when a card actually appears.
+// A flop/turn/river reveal is always pure addition (3/4/5 cards, never
+// fewer, never different earlier ones), so that's also what lets this
+// stagger just the newly-revealed cards instead of the whole board.
 function renderCards(container, cards, hiddenCount) {
-  container.innerHTML = "";
-  if (hiddenCount) {
+  if (hiddenCount !== undefined) {
+    const state = "hidden:" + hiddenCount;
+    if (container.dataset.cardState === state) return;
+    container.innerHTML = "";
     for (let i = 0; i < hiddenCount; i++) container.appendChild(cardEl(null, true));
+    container.dataset.cardState = state;
     return;
   }
-  cards.forEach((c) => container.appendChild(cardEl(c, false)));
+
+  const newKeys = cards.map(cardKey);
+  const prevKeys = (container.dataset.cardState || "").split(",").filter(Boolean);
+  const isPureAddition = newKeys.length > prevKeys.length &&
+    prevKeys.every((key, i) => key === newKeys[i]);
+
+  if (isPureAddition) {
+    for (let i = prevKeys.length; i < cards.length; i++) {
+      appendCardWithDelay(container, cards[i], i - prevKeys.length);
+    }
+  } else if (newKeys.join(",") !== prevKeys.join(",")) {
+    container.innerHTML = "";
+    cards.forEach((c, i) => appendCardWithDelay(container, c, i));
+  }
+  // else: identical to what's already on screen -- leave it alone.
+  container.dataset.cardState = newKeys.join(",");
 }
 
 function describeAction(lastAction) {
