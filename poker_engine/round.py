@@ -33,20 +33,12 @@ class Round:
         # be visible anywhere -- by the time the caller broadcasts, Round has
         # already moved on to a brand new hand.
         self.last_showdown = None
-        # TODO(human): current_hand_id needs a real initial value here --
-        # a stable identifier for THIS hand (the very first one dealt by
-        # consumers.py's connect(), which calls deal_hole_cards() directly,
-        # bypassing start_new_hand() entirely -- this is the only place
-        # that path's hand gets an id). Also assign a NEW one in
-        # start_new_hand() and restart() (both deal a fresh hand the same
-        # way __init__ implicitly does for hand 1), and capture the
-        # CURRENT value into last_showdown inside
-        # _resolve_showdown_and_start_new_hand() -- see the comment there
-        # for exactly where, and why the order matters.
-        #
-        # Value type is your call: an incrementing int counter (readable
-        # in logs, e.g. "hand #42") or a UUID (no counter state to keep in
-        # sync, trivially unique with no coordination).
+        # Stable identifier for the current hand -- incremented in
+        # start_new_hand() and restart() too, and captured into
+        # last_showdown by _resolve_showdown_and_start_new_hand() before
+        # either of those overwrites it. table/persistence.py keys Hand
+        # rows on (table, hand_number) using this value, so a retried
+        # caller can't create duplicate persisted hands.
         self.current_hand_id = 1
         # Set once a hand resolves with some seat's stack at 0 -- no
         # bankroll/elimination handling exists beyond this, so heads-up the
@@ -65,48 +57,25 @@ class Round:
         if RoundState.PRE_FLOP != self.current_round_state:
             raise ValueError("Hole cards can only be dealt during the PRE_FLOP round state.")
 
-        # TODO(human): Blind posting and the preflop turn order both change
-        # once len(self.seats) can be more than 2 -- heads-up and 3+-handed
-        # follow genuinely different rules, not just "more seats":
-        #
-        # Heads-up (2 seats) -- today's behavior, must still work:
-        #   - The button posts the small blind; the other seat posts the
-        #     big blind.
-        #   - The button acts FIRST preflop (it's the only seat that can,
-        #     besides the big blind who's already posted).
-        #
+        # Heads-up and 3+-handed follow genuinely different blind/turn-order
+        # rules, not just "more seats": heads-up, the button posts the small
+        # blind and acts first preflop; 3+ handed, the button posts nothing,
+        # the two seats after it post the blinds, and action starts with the
+        # seat after the big blind (wrapping back to the button acting last
+        # -- or, at exactly 3 seats, acting first again, since button+3
+        # wraps to button+0). Postflop order needs no such split --
+        # _non_button_index() as the first seat to act after the button is
+        # already the general rule at any table size.
         if len(self.seats) == 2:
             small_blind_posted = self.seats[self.button_index].put_in_pot(self.SMALL_BLIND)
             big_blind_posted = self.seats[self._non_button_index()].put_in_pot(self.BIG_BLIND)
             self.pot += small_blind_posted + big_blind_posted
             self.current_turn_index = self.button_index  # Button acts first preflop
-        # 3+ handed:
-        #   - The button posts NOTHING.
-        #   - The seat immediately after the button posts the small blind;
-        #     the seat after THAT posts the big blind.
-        #   - Action starts with the seat after the big blind, and wraps
-        #     all the way around so the button acts LAST preflop.
-        #
         else:
             small_blind_posted = self.seats[self._non_button_index()].put_in_pot(self.SMALL_BLIND)
             big_blind_posted = self.seats[(self.button_index + 2) % len(self.seats)].put_in_pot(self.BIG_BLIND)
             self.pot += small_blind_posted + big_blind_posted
-        # _non_button_index() already computes "button_index + 1" generically
             self.current_turn_index = (self.button_index + 3) % len(self.seats)
-        # -- that's exactly the small-blind seat in the 3+ case, and happens
-        # to equal the only other seat in the heads-up case. Decide how to
-        # get from there to the big-blind seat and the first-to-act seat for
-        # an arbitrary seat count (modular arithmetic on len(self.seats)),
-        # and whether heads-up needs its own branch or falls out of the same
-        # formula as a special case of N=2.
-        #
-        # Postflop turn order needs NO changes -- _non_button_index() as the
-        # first seat to act after the button is already the correct general
-        # rule at any table size, not a heads-up-specific shortcut.
-        #
-        # Must still: post exactly two blinds total (not scaled by seat
-        # count), add them to self.pot, and set self.current_turn_index to
-        # whichever seat actually acts first for the seat count in play.
 
         self.current_bet_to_match = self.BIG_BLIND  # Always BIG_BLIND regardless of seat count.
         for seat in self.seats:
@@ -131,8 +100,6 @@ class Round:
         self.deck.shuffle()
         self.current_round_state = RoundState.PRE_FLOP
         self.button_index = self._non_button_index()  # Rotate the button
-        # (see the TODO(human) in __init__) assign this new hand's id here,
-        # before dealing it.
         self.deal_hole_cards()
 
     def restart(self, starting_stack: int = 500):
@@ -157,8 +124,6 @@ class Round:
         self.last_showdown = None
         self.last_action = None
         self.time_started = 0
-        # (see the TODO(human) in __init__) same as start_new_hand() -- this
-        # deals a fresh hand directly too, so it needs a fresh id as well.
         self.deal_hole_cards()
 
     def apply_action_and_advance(self, seat: Seat, action: str, amount: int = 0):
@@ -221,29 +186,40 @@ class Round:
             "board": board,
             "results": [{"player": seat.player, "amount": amount} for seat, amount in results],
             "hands": hands,
-            "hand_id": self.current_hand_id
-            # (see the TODO(human) in __init__) capture self.current_hand_id
-            # HERE -- this dict is built before start_new_hand() runs below,
-            # which is what will overwrite current_hand_id with the NEXT
-            # hand's id. Capturing it after that call would record the
-            # wrong hand, the same ordering trap last_showdown itself exists
-            # to avoid for the client.
+            # Captured HERE, before start_new_hand() runs below and
+            # overwrites current_hand_id with the NEXT hand's id -- the
+            # same ordering trap last_showdown itself exists to avoid for
+            # the client.
+            "hand_id": self.current_hand_id,
         }
-        # A broke seat (stack 0) could never post a real blind for another
-        # hand -- there's no bankroll/elimination handling beyond this, so
-        # heads-up the game just ends here rather than cycling do-nothing
-        # hands forever (a 0-stack seat is permanently "all-in" with nothing
-        # contributed, which would otherwise make every future hand's very
-        # first blind-post look like a complete, unopposed betting round).
-        if any(seat.stack <= 0 for seat in self.seats):
-            self.game_over = True
-            # start_new_hand() normally resets pot to 0 as a side effect of
-            # dealing the next hand -- skipped here, but showdown_resolution()
-            # already moved every chip into the winner's stack, so the stale
-            # pot figure must still be cleared or stack+pot double-counts it.
-            self.pot = 0
-        else:
-            self.start_new_hand()
+        # TODO(human): "any seat busted -> whole game over" was fine at a
+        # 2-seat table (busting IS losing), but at 3+ seats it currently
+        # ends the game for everyone the moment the FIRST player busts, even
+        # with several others still holding chips. The real end condition
+        # is "fewer than 2 seats still have a stack > 0".
+        #
+        # A busted seat needs to be excluded from every future hand, not
+        # just skipped once: no cards dealt to it, no blind posted by or to
+        # it, never the button, never on the clock. The tricky part is that
+        # reset_for_new_hand() unconditionally clears is_folded and
+        # is_all_in at the start of every hand -- so a busted seat (stack
+        # 0, currently indistinguishable from "folded" or "all-in" once the
+        # hand that busted it ends) would silently come back to life next
+        # hand unless something marks it as OUT in a way that survives
+        # reset_for_new_hand(), not just this hand's state.
+        #
+        # That's the actual design decision: do you check `seat.stack <= 0`
+        # directly everywhere a seat's eligibility already gets checked
+        # (deal_hole_cards()'s blind posting, start_new_hand()'s button
+        # rotation via _non_button_index(), advance_turn()'s folded/all-in
+        # skip), or introduce a dedicated flag (e.g. is_eliminated) set once
+        # and never cleared by reset_for_new_hand()? Either can work --
+        # pick one and apply it consistently at all three of those call
+        # sites, not just the end-condition check below.
+        #
+        # Must still: end the game (self.game_over = True, self.pot = 0,
+        # same as today) once only one seat has chips left, and otherwise
+        # call self.start_new_hand() as today.
 
     def burn_card(self):
         self.deck.deal_card()  # Burn a card (remove the top card from the deck)

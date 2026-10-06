@@ -1,5 +1,4 @@
 # Milestone 2 — pure Python domain engine, no framework dependencies.
-# TODO(human): define Rank (IntEnum), Suit (Enum), and Card here.
 
 import random
 from enum import Enum, IntEnum
