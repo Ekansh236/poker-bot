@@ -13,7 +13,8 @@
   <form method="post" action="{% url 'create_game' %}">
     {% csrf_token %}
     <label for="player_id">Your name</label>
-    <input type="text" id="player_id" name="player_id" placeholder="e.g. alice" required autofocus>
+    <input type="text" id="player_id" name="player_id" placeholder="e.g. alice" required autofocus
+           pattern="\w{1,20}" maxlength="20" title="Letters, numbers, and underscores only">
 
     <div style="margin-top: 16px;">
       <div class="bot-count-row">

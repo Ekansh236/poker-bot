@@ -8,10 +8,12 @@
   <form method="post" action="{% url 'join_game' %}">
     {% csrf_token %}
     <label for="table_id">Table code</label>
-    <input type="text" id="table_id" name="table_id" value="{{ table_id }}" placeholder="e.g. a1b2c3d4" required {% if not table_id %}autofocus{% endif %}>
+    <input type="text" id="table_id" name="table_id" value="{{ table_id }}" placeholder="e.g. a1b2c3d4" required {% if not table_id %}autofocus{% endif %}
+           pattern="\w{1,20}" maxlength="20" title="Letters, numbers, and underscores only">
 
     <label for="player_id" style="display:block; margin-top: 14px;">Your name</label>
-    <input type="text" id="player_id" name="player_id" placeholder="e.g. bob" required {% if table_id %}autofocus{% endif %}>
+    <input type="text" id="player_id" name="player_id" placeholder="e.g. bob" required {% if table_id %}autofocus{% endif %}
+           pattern="\w{1,20}" maxlength="20" title="Letters, numbers, and underscores only">
 
     <button type="submit" class="btn-prominent" style="margin-top: 20px;">Join Table</button>
   </form>

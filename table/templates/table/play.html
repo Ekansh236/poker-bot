@@ -430,7 +430,7 @@
 <div class="actions">
   <button class="action-btn fold" id="btn-fold" disabled>Fold</button>
   <button class="action-btn" id="btn-check-call" disabled>Check</button>
-  <input type="number" id="raise-amount" min="1" placeholder="amount">
+  <input type="number" id="raise-amount" min="1" placeholder="amount" disabled>
   <button class="action-btn" id="btn-raise" disabled>Raise</button>
   <button class="action-btn" id="btn-continue" style="display: none;">Continue</button>
 </div>
@@ -658,7 +658,7 @@ function showShowdownReveal(state) {
     renderCards(document.getElementById("my-cards"), sd.hands[PLAYER_ID]);
   }
 
-  btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = true;
+  btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = raiseInput.disabled = true;
   btnContinue.style.display = "inline-block";
   btnContinue.onclick = () => {
     awaitingContinue = false;
@@ -700,7 +700,7 @@ function renderLiveState(state) {
     announce(busted.length
       ? `${busted.map((s) => s.player).join(", ")} out of chips -- ${survivors.map((s) => s.player).join(", ") || "no one"} left standing.`
       : "Game over.", false);
-    btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = true;
+    btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = raiseInput.disabled = true;
     gameOverText.textContent = mySeat && mySeat.stack > 0 ? "YOU WIN!" : "YOU LOSE";
     gameOverBanner.style.display = "flex";
     return;
@@ -784,7 +784,16 @@ function renderLiveState(state) {
     btnFold.disabled = !canAct;
     btnCheckCall.disabled = !canAct;
     btnRaise.disabled = !canAct;
+    // The amount field is only ever meaningful while raising is actually a
+    // legal action -- disabled the rest of the time instead of sitting
+    // there typeable with nothing to do with what's typed into it.
+    raiseInput.disabled = !canAct;
     btnCheckCall.textContent = amountToCall > 0 ? "Call " + amountToCall : "Check";
+    // Minimum legal "raise to" total -- matches apply_action()'s own check
+    // (amount + bet_this_street must exceed current_bet_to_match), so the
+    // stepper/native validation refuses an impossible value before it's
+    // ever sent, instead of a round trip just to get rejected.
+    raiseInput.min = state.current_bet_to_match + 1;
     raiseInput.placeholder = "raise to " + (state.current_bet_to_match + 10);
   }
 }
@@ -839,6 +848,10 @@ function connect() {
     }
     if (msg.error) {
       log(msg.error, true);
+      // The optimistic disable on click (see the action handlers below)
+      // needs undoing on a rejection, or the buttons would sit stuck
+      // disabled with nothing left to ever re-enable them.
+      if (latestState) renderLiveState(latestState);
       return;
     }
     log("");
@@ -851,20 +864,41 @@ function connect() {
   window.currentSocket = ws;
 }
 
-btnFold.addEventListener("click", () => window.currentSocket.send(JSON.stringify({ action: "fold" })));
+// Disables every action control the instant one is clicked, before the
+// server has even responded -- a round trip is plenty of time for a fast
+// double-click or double-tap to fire the same action twice, and the
+// engine would just reject the second one as "not your turn" anyway
+// (correct, but a confusing error to show for what was really just one
+// click). The error handler above restores the real state if the first
+// one gets rejected too.
+function disableActionControls() {
+  btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = raiseInput.disabled = true;
+}
+
+btnFold.addEventListener("click", () => {
+  disableActionControls();
+  window.currentSocket.send(JSON.stringify({ action: "fold" }));
+});
 btnCheckCall.addEventListener("click", () => {
   const amountToCall = latestState.current_bet_to_match - latestState.seats.find((s) => s.player === PLAYER_ID).bet_this_street;
+  disableActionControls();
   window.currentSocket.send(JSON.stringify({ action: amountToCall > 0 ? "call" : "check" }));
 });
-btnRaise.addEventListener("click", () => {
+function submitRaise() {
+  if (btnRaise.disabled) return;
   const raiseTo = parseInt(raiseInput.value, 10);
   if (!raiseTo || raiseTo <= 0) { log("Enter a raise-to amount first.", true); return; }
   const mySeat = latestState.seats.find((s) => s.player === PLAYER_ID);
   // apply_action()'s "raise" expects the NEW chips added this action, not
   // an absolute total -- convert the "raise to" total the input asks for.
   const amount = raiseTo - mySeat.bet_this_street;
+  disableActionControls();
   window.currentSocket.send(JSON.stringify({ action: "raise", amount: amount }));
   raiseInput.value = "";
+}
+btnRaise.addEventListener("click", submitRaise);
+raiseInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitRaise();
 });
 function doRestart() {
   // A restart makes any reveal currently on screen stale immediately --
@@ -874,11 +908,25 @@ function doRestart() {
   gameOverBanner.style.display = "none";
   window.currentSocket.send(JSON.stringify({ type: "restart" }));
 }
-btnRestart.addEventListener("click", doRestart);
+btnRestart.addEventListener("click", () => {
+  // Only confirm when this button would actually reset a game already in
+  // progress -- its label says "Start" (not "Restart") on a table nobody's
+  // dealt a hand at yet, which has nothing to lose by clicking it.
+  if (btnRestart.textContent.startsWith("Restart") &&
+      !confirm("Restart the table? Every stack resets to 500, including anyone else still playing.")) {
+    return;
+  }
+  doRestart();
+});
+// Game already ended by the time this is reachable -- nothing left to
+// lose by clicking it, so no confirmation needed here.
 btnPlayAgain.addEventListener("click", doRestart);
 
 const btnExit = document.getElementById("btn-exit");
 btnExit.addEventListener("click", () => {
+  if (!confirm("Leave this table? You'll be folded out of the current hand if one's in progress.")) {
+    return;
+  }
   btnExit.disabled = true;
   window.currentSocket.send(JSON.stringify({ type: "leave" }));
   // The redirect happens once the server confirms (ws.onmessage, type
