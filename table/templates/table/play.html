@@ -213,7 +213,7 @@
   /* -- opponent seats, positioned around the rail via JS left/top -- */
   .seat {
     position: absolute;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%) scale(var(--seat-scale, 1));
     width: 96px;
     text-align: center;
     background: rgba(24, 16, 11, 0.88);
@@ -606,6 +606,11 @@ function positionOpponentSeats(allSeats) {
   }
   const usableStart = 230, usableSpan = 260; // degrees; 0 = top, clockwise
   const radiusX = 44, radiusY = 40;
+  // Seats are a fixed 96px wide -- fine for a handful of opponents, but a
+  // full table of bots packs 9 of them onto the same 260-degree arc, close
+  // enough to visually overlap. Shrinking each seat as more of them have
+  // to share that arc keeps them from stacking on top of each other.
+  const seatScale = others.length <= 5 ? 1 : others.length <= 7 ? 0.82 : 0.68;
   others.forEach((seat, i) => {
     const angleDeg = usableStart + (usableSpan * (i + 1)) / (others.length + 1);
     const rad = (angleDeg * Math.PI) / 180;
@@ -614,6 +619,7 @@ function positionOpponentSeats(allSeats) {
     const el = getOpponentSeatEl(seat.player);
     el.style.left = x + "%";
     el.style.top = y + "%";
+    el.style.setProperty("--seat-scale", seatScale);
   });
 }
 
