@@ -159,56 +159,14 @@
     100% { transform: scale(1); }
   }
 
-  /* -- poker chips, decorative but also used for the bet-in-front badge -- */
-  .chip {
-    width: 18px; height: 18px;
-    border-radius: 50%;
-    flex: 0 0 auto;
-    display: inline-block;
-    border: 2px dashed rgba(255,255,255,0.65);
-    box-shadow: 0 2px 3px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(0,0,0,0.25);
-    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.45), transparent 55%), var(--chip-color, #b5384a);
-  }
-  .chip.gold { --chip-color: #d4af6a; }
-  .chip.red { --chip-color: #b5384a; }
-  .chip.black { --chip-color: #241c16; border-color: rgba(212,175,106,0.55); }
-  .chip.blue { --chip-color: #2a4a7a; }
-  .chip.white { --chip-color: #cfc8ba; border-color: rgba(40,30,20,0.4); }
-  .pot-chips {
-    display: flex;
-    justify-content: center;
-    align-items: flex-end;
-    height: 26px;
-  }
-  /* Same chip-stack component as a seat's stack, just a bit bigger since
-     it's the visual centerpiece of the table. */
-  .pot-chips .chip-stack { margin-right: 0; }
-  .pot-chips .chip-stack .chip { width: 20px; height: 9px; }
   .bet-badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     font-size: 11px;
     font-weight: 600;
-    color: #f0e6d2;
+    color: #ff9d4a;
   }
-  .seat-chip-icon { width: 13px; height: 13px; margin-right: 3px; vertical-align: -2px; }
-  /* A real chip tower (edge-on discs stacked up), not a flat row -- taller
-     and darker toward the top as the amount it represents goes up, same
-     low-to-high denomination progression real chips use. */
-  .chip-stack {
-    display: inline-flex;
-    flex-direction: column-reverse;
-    align-items: center;
-    vertical-align: -5px;
-    margin-right: 4px;
-  }
-  .chip-stack .chip {
-    width: 15px; height: 7px;
-    margin-top: -3px;
-    border-width: 1.5px;
-  }
-  .chip-stack .chip:first-child { margin-top: 0; }
 
   .cards { display: flex; gap: 5px; justify-content: center; }
   .card {
@@ -419,9 +377,6 @@
     .seat .stack { font-size: 10px; }
     .seat .card { width: 20px; height: 28px; }
     .pot-display { font-size: 15px; }
-    .pot-chips .chip-stack .chip { width: 16px; height: 7px; }
-    .seat-chip-icon { width: 11px; height: 11px; }
-    .chip-stack .chip { width: 12px; height: 5px; }
     /* Still bigger than the pre-redesign size, just not the full desktop
        bump -- 60x84 would eat too much of a phone's width next to the
        action buttons below it. */
@@ -456,7 +411,6 @@
   <div class="center-content">
     <div class="street-banner" id="round-state">--</div>
     <div class="cards" id="community-cards"></div>
-    <div class="pot-chips" id="pot-chips"></div>
     <div class="pot-display" id="pot">Pot: --</div>
   </div>
 </div>
@@ -601,34 +555,10 @@ function actionBadgeEl(lastAction) {
   return el;
 }
 
-// Taller, higher-denomination stacks for bigger amounts -- low-to-high
-// tier progression real chip colors use (white, red, blue, black).
-const CHIP_TIERS = ["white", "red", "blue", "black"];
-function chipTierCount(amount) {
-  if (amount >= 600) return 4;
-  if (amount >= 300) return 3;
-  if (amount >= 100) return 2;
-  return 1;
-}
-function chipStackEl(amount) {
-  const wrap = document.createElement("span");
-  wrap.className = "chip-stack";
-  const count = chipTierCount(amount);
-  for (let i = 0; i < count; i++) {
-    const chip = document.createElement("span");
-    chip.className = "chip " + CHIP_TIERS[i];
-    wrap.appendChild(chip);
-  }
-  return wrap;
-}
-
 function betBadgeEl(amount) {
   const el = document.createElement("span");
   el.className = "bet-badge";
-  const chip = document.createElement("span");
-  chip.className = "chip red seat-chip-icon";
-  el.appendChild(chip);
-  el.appendChild(document.createTextNode(String(amount)));
+  el.textContent = "Bet: " + amount;
   return el;
 }
 
@@ -775,10 +705,6 @@ function renderLiveState(state) {
   document.getElementById("round-state").textContent = state.round_state.replace("_", " ");
   const potEl = document.getElementById("pot");
   potEl.textContent = "Pot: " + state.pot;
-  const potChipsEl = document.getElementById("pot-chips");
-  potChipsEl.innerHTML = "";
-  potChipsEl.style.visibility = state.pot > 0 ? "visible" : "hidden";
-  if (state.pot > 0) potChipsEl.appendChild(chipStackEl(state.pot));
   if (state.pot !== lastRenderedPot) {
     potEl.classList.remove("pot-pulse");
     void potEl.offsetWidth; // force reflow so the animation restarts
@@ -804,10 +730,7 @@ function renderLiveState(state) {
     const isActive = state.current_turn === oppSeat.player;
     seatEl.classList.toggle("active-turn", isActive);
     seatEl.querySelector(".label").textContent = oppSeat.player + (oppSeat.is_bot ? " (bot)" : "");
-    const stackEl = seatEl.querySelector(".stack");
-    stackEl.innerHTML = "";
-    stackEl.appendChild(chipStackEl(oppSeat.stack));
-    stackEl.appendChild(document.createTextNode(String(oppSeat.stack)));
+    seatEl.querySelector(".stack").textContent = "Stack: " + oppSeat.stack;
     // Opponents' hole cards are never sent to us -- always render face-down
     // if they still have a hand in this street (i.e. haven't folded/busted).
     renderCards(seatEl.querySelector(".cards"), [], (oppSeat.is_folded || oppSeat.stack <= 0) ? 0 : 2);
@@ -827,10 +750,7 @@ function renderLiveState(state) {
 
   if (mySeat) {
     mySeatWrap.classList.toggle("active-turn", myTurn);
-    const myStackEl = document.getElementById("my-stack");
-    myStackEl.innerHTML = "";
-    myStackEl.appendChild(chipStackEl(mySeat.stack));
-    myStackEl.appendChild(document.createTextNode(String(mySeat.stack)));
+    document.getElementById("my-stack").textContent = "Stack: " + mySeat.stack;
     renderCards(document.getElementById("my-cards"), myHand);
 
     const myStatusLine = document.getElementById("my-status");
