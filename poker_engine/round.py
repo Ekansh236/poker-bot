@@ -295,8 +295,30 @@ class Round:
             return self.community_cards[-1]
         raise ValueError("River can only be dealt during the RIVER round state.")
 
+    def _is_still_contesting_hand(self, seat):
+        """Whether `seat` is a live participant in the hand CURRENTLY in progress.
+
+        TODO(human): check_if_all_but_one_folded() and is_betting_round_complete()
+        both currently filter seats with just "not seat.is_folded" -- which looks
+        right but silently also counts a seat that busted out in some EARLIER
+        hand. A busted seat is never marked is_folded=True (start_new_hand()'s
+        reset guard leaves it permanently is_all_in instead, with cards=None
+        forever -- see the comment there). So today, the moment any table has
+        a busted seat sitting at it, these two methods both start believing
+        that seat is still "in" every hand after it busted, which throws off
+        both when a fold-win should be recognized and when a betting round
+        should be considered complete.
+
+        Both call sites below will call this one helper instead of inlining
+        the check, so there's exactly one place that decides it.
+
+        Return True if `seat` should count as still contesting this hand,
+        False if it's out (folded this hand, OR busted in some earlier one).
+        """
+        return not seat.is_folded and seat.cards is not None
+
     def check_if_all_but_one_folded(self):
-        active_seats = [seat for seat in self.seats if not seat.is_folded]
+        active_seats = [seat for seat in self.seats if self._is_still_contesting_hand(seat)]
         return len(active_seats) == 1
 
     def refund_uncalled_bets(self):
@@ -387,7 +409,7 @@ class Round:
         # A betting round is complete if all active seats have acted and either:
         # 1. All active seats have matched the current bet to match, or
         # 2. Only one active seat remains (everyone else has folded).
-        active_seats = [seat for seat in self.seats if not seat.is_folded]
+        active_seats = [seat for seat in self.seats if self._is_still_contesting_hand(seat)]
         if len(active_seats) <= 1:
             return True
 
@@ -428,7 +450,7 @@ class Round:
         pots = self.compute_pots()
         if self.check_if_all_but_one_folded():
             # If all but one player has folded, the remaining player wins the entire pot.
-            winner = next(seat for seat in self.seats if not seat.is_folded)
+            winner = next(seat for seat in self.seats if self._is_still_contesting_hand(seat))
             winner.stack += self.pot
             return [(winner, self.pot)]
 

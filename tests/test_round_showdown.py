@@ -10,6 +10,7 @@ def make_round(num_seats):
 def test_fold_win_awards_entire_pot_to_last_player():
     round_ = make_round(2)
     a, b = round_.seats
+    a.cards = (Card(Rank.ACE, Suit.HEARTS), Card(Rank.ACE, Suit.SPADES))
     a.total_contributed_to_pot = 200
     b.total_contributed_to_pot = 200
     b.is_folded = True

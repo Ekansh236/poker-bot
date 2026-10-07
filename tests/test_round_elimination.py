@@ -190,3 +190,56 @@ def test_game_ends_once_only_one_seat_has_chips_left():
 
     assert round_.game_over is True
     assert round_.pot == 0
+
+
+def test_last_live_opponent_folding_is_recognized_as_a_fold_win_despite_a_busted_seat():
+    # C busted out in some earlier hand (permanently is_all_in, cards=None,
+    # never is_folded -- see start_new_hand()'s reset guard). This hand, B
+    # (the only other real opponent) folds to A -- that must immediately
+    # end the hand in A's favor, not get missed because C still silently
+    # counts as "active" to a naive `not seat.is_folded` check.
+    round_ = make_round(3)
+    a, b, c = round_.seats
+    c.stack = 0
+    c.is_all_in = True
+    c.cards = None
+    a.cards = (Card(Rank.ACE, Suit.HEARTS), Card(Rank.ACE, Suit.SPADES))
+    b.cards = (Card(Rank.TWO, Suit.CLUBS), Card(Rank.THREE, Suit.DIAMONDS))
+    round_.current_turn_index = round_.seats.index(b)
+    round_.pot = 20
+    a.total_contributed_to_pot = 10
+    b.total_contributed_to_pot = 10
+    a.bet_this_street = 10
+    a.has_acted_this_street = True
+
+    round_.apply_action_and_advance(seat=b, action="fold", amount=0)
+
+    # Confirms the pot was actually awarded to A, not lost or handed to C --
+    # NOTE: can't assert a.stack directly here, since this also immediately
+    # deals and blinds the next hand (same contract as every other
+    # fold-win/showdown resolution), which moves A's stack again right
+    # after. See test_fold_win_pot_goes_to_the_real_winner_not_a_busted_seat_sitting_earlier
+    # for the direct pot-award assertion in isolation.
+    assert round_.last_showdown["results"] == [{"player": "P0", "amount": 20}]
+
+
+def test_fold_win_pot_goes_to_the_real_winner_not_a_busted_seat_sitting_earlier():
+    # The busted seat (A) sits BEFORE the real winner (B) in seat order --
+    # a naive `next(seat for seat in self.seats if not seat.is_folded)`
+    # picks A first, since A is never actually marked is_folded, and hands
+    # the whole pot to a seat that's already out of the game.
+    round_ = make_round(3)
+    a, b, c = round_.seats
+    a.stack = 0
+    a.is_all_in = True
+    a.cards = None
+    b.cards = (Card(Rank.ACE, Suit.HEARTS), Card(Rank.ACE, Suit.SPADES))
+    c.is_folded = True
+    round_.pot = 100
+    b.total_contributed_to_pot = 100
+
+    results = round_.showdown_resolution()
+
+    assert results == [(b, 100)]
+    assert b.stack == 600  # started at 500, +100 won
+    assert a.stack == 0  # must NOT have received the pot
