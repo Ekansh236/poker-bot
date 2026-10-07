@@ -152,8 +152,16 @@ def bot_decide(round_, seat) -> tuple[str, int]:
     """
     hole_cards = seat.cards
     community_cards = round_.community_cards
+    # round_._is_still_contesting_hand(), not a bare "not s.is_folded" --
+    # a seat busted in some earlier hand is never marked folded (it stays
+    # permanently is_all_in with cards=None instead, see start_new_hand()),
+    # so "not is_folded" alone keeps counting it as a live opponent forever.
+    # With a full 9-bot table, that inflates num_opponents right back up to
+    # 9 even once eliminations have cut the real field down to 2 or 3,
+    # making every remaining bot simulate equity against phantom players
+    # and fold far tighter than the hand actually warrants.
     num_opponents = sum(
-        1 for s in round_.seats if s != seat and not s.is_folded
+        1 for s in round_.seats if s != seat and round_._is_still_contesting_hand(s)
     )
     if num_opponents == 0:
         # If there are no opponents, the bot can check or bet freely.
