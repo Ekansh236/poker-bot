@@ -12,6 +12,13 @@ from table.serializers import serialize_round
 
 log = structlog.get_logger(__name__)
 
+# How long a bot's turn stays visibly "on the clock" (current_turn pointing
+# at it, seat glowing) before its action actually fires. Scheduled via
+# apply_async(countdown=...) rather than time.sleep() -- this worker runs
+# --pool=solo, so a real sleep would block every other table's bots too,
+# not just this one's.
+BOT_ACTION_DELAY_SECONDS = 7
+
 
 @shared_task
 def bot_decide_task(table_id: str, player_id: str) -> None:
@@ -42,7 +49,7 @@ def bot_decide_task(table_id: str, player_id: str) -> None:
         # case: consumers.receive() only fires on a real player's message.
         next_seat = round_.seats[round_.current_turn_index]
         if next_seat.is_bot:
-            bot_decide_task.delay(table_id, next_seat.player)
+            bot_decide_task.apply_async(args=[table_id, next_seat.player], countdown=BOT_ACTION_DELAY_SECONDS)
 
 
 @shared_task
@@ -77,4 +84,4 @@ def check_turn_timeouts() -> None:
                 # squarely on a bot's turn with nothing else to dispatch it.
                 next_seat = round_.seats[round_.current_turn_index]
                 if next_seat.is_bot:
-                    bot_decide_task.delay(table_id, next_seat.player)
+                    bot_decide_task.apply_async(args=[table_id, next_seat.player], countdown=BOT_ACTION_DELAY_SECONDS)

@@ -7,7 +7,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from table import registry
 from table.persistence import persist_hand_result
 from table.serializers import serialize_hand, serialize_round
-from table.tasks import bot_decide_task
+from table.tasks import BOT_ACTION_DELAY_SECONDS, bot_decide_task
 
 log = structlog.get_logger(__name__)
 
@@ -104,7 +104,10 @@ class TableConsumer(AsyncWebsocketConsumer):
                     {"type": "table.message", "message": broadcast_payload},
                 )
                 if round_.seats[round_.current_turn_index].is_bot:
-                    bot_decide_task.delay(self.table_id, round_.seats[round_.current_turn_index].player)
+                    bot_decide_task.apply_async(
+                        args=[self.table_id, round_.seats[round_.current_turn_index].player],
+                        countdown=BOT_ACTION_DELAY_SECONDS,
+                    )
             return
 
         action = data.get("action")
@@ -148,7 +151,10 @@ class TableConsumer(AsyncWebsocketConsumer):
             )
 
             if round_.seats[round_.current_turn_index].is_bot:
-                bot_decide_task.delay(self.table_id, round_.seats[round_.current_turn_index].player)
+                bot_decide_task.apply_async(
+                    args=[self.table_id, round_.seats[round_.current_turn_index].player],
+                    countdown=BOT_ACTION_DELAY_SECONDS,
+                )
 
     async def table_message(self, event):
         await self.send(text_data=json.dumps(event['message']))
