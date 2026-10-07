@@ -29,9 +29,15 @@ class TableConsumer(AsyncWebsocketConsumer):
                 # claim_seat() had no bot left it could safely bump) --
                 # reject the connection with a real message instead of
                 # crashing the ASGI handler with an unhandled exception.
+                # Closed with a distinct code (4001, in the range the
+                # WebSocket spec reserves for application use) so the
+                # client can tell "rejected on purpose, don't retry" apart
+                # from a normal dropped connection -- otherwise its own
+                # auto-reconnect immediately hits this same rejection again,
+                # forever.
                 await self.accept()
                 await self.send(text_data=json.dumps({"error": str(e)}))
-                await self.close()
+                await self.close(code=4001)
                 return
             # Bot-fill for display immediately (harmless and reversible --
             # claim_seat() will happily bump an undealt bot back out for the

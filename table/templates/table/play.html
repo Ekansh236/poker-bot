@@ -788,7 +788,18 @@ function connect() {
     ws.send(JSON.stringify({ type: "get_hand" }));
   };
 
-  ws.onclose = () => {
+  ws.onclose = (event) => {
+    if (event.code === 4001) {
+      // The server rejected this connection on purpose (table's full) and
+      // closed with this specific code precisely so we DON'T retry --
+      // retrying would just hit the same rejection forever, which is
+      // exactly what looked like a stuck "disconnected -- reconnecting"
+      // loop before this check existed.
+      statusEl.textContent = "can't join";
+      statusEl.className = "disconnected";
+      log("This table is already full and a hand is in progress -- try again once it ends, or use a different table.", true);
+      return;
+    }
     statusEl.textContent = "disconnected -- reconnecting…";
     statusEl.className = "disconnected";
     setTimeout(connect, 2000);
