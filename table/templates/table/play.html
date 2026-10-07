@@ -443,7 +443,7 @@
 </div>
 
 <div class="actions" style="margin-top: 8px;">
-  <button class="action-btn" id="btn-restart" style="opacity: 0.6; font-size: 12px; padding: 6px 12px;">Restart (500 chips)</button>
+  <button class="action-btn" id="btn-restart" style="opacity: 0.6; font-size: 12px; padding: 6px 12px;">Start (500 chips)</button>
 </div>
 
 <div id="log"></div>
@@ -720,8 +720,14 @@ function renderLiveState(state) {
   }
   renderCards(document.getElementById("community-cards"), state.community_cards);
 
+  // "PRE_FLOP" only ever means nobody's dealt a hand at this table yet
+  // (see the canAct guard below) -- the button reads "Start" until then,
+  // "Restart" afterward, since only then does clicking it actually reset
+  // an in-progress game rather than begin a brand new one.
+  btnRestart.textContent = state.round_state === "PRE_FLOP" ? "Start (500 chips)" : "Restart (500 chips)";
+
   if (state.round_state === "PRE_FLOP") {
-    announce("Click “Restart (500 chips)” below to deal the first hand.", false);
+    announce("Click “Start (500 chips)” below to deal the first hand.", false);
   } else if (state.last_action) {
     const actor = state.last_action.player;
     announce((actor === PLAYER_ID ? "You" : actor) + " " + describeAction(state.last_action).toLowerCase() +
