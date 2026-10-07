@@ -4,6 +4,7 @@ import secrets
 from django.shortcuts import redirect, render
 
 from table import registry
+from table.tasks import TURN_TIMEOUT_SECONDS
 
 # table/routing.py's WebSocket URL only matches \w+ for both segments --
 # anything else (a space, a hyphen, an emoji) passes this HTTP form just
@@ -68,4 +69,8 @@ def play_table(request, table_id, player_id):
     # whose WebSocket never connects, with no explanation why.
     if not (NAME_PATTERN.match(table_id) and NAME_PATTERN.match(player_id)):
         return redirect("lobby")
-    return render(request, "table/play.html", {"table_id": table_id, "player_id": player_id})
+    return render(request, "table/play.html", {
+        "table_id": table_id,
+        "player_id": player_id,
+        "turn_timeout_seconds": TURN_TIMEOUT_SECONDS,
+    })

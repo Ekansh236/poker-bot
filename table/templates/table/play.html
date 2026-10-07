@@ -292,6 +292,37 @@
   .my-seat-wrap .label { font-size: 13px; opacity: 0.85; }
   .my-seat-wrap.active-turn .label { color: #ffd54a; font-weight: 700; opacity: 1; }
   .my-seat-wrap .stack { font-size: 15px; margin-top: 2px; }
+  /* -- turn countdown: a line that travels across the stack panel -- */
+  .turn-timer-track {
+    width: 100%;
+    height: 4px;
+    margin-top: 6px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.12);
+    overflow: hidden;
+    opacity: 0; /* hidden except during my actual turn, see canAct below */
+    transition: opacity 0.15s;
+  }
+  .turn-timer-track.visible { opacity: 1; }
+  .turn-timer-fill {
+    width: 100%;
+    height: 100%;
+    background: #ffd54a;
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  /* Last few seconds -- a color cue on top of the shrinking bar itself,
+     since the bar alone gets thin enough to miss at a glance. */
+  .turn-timer-fill.urgent { background: #ff5a5a; }
+  .turn-timer-fill.running {
+    animation-name: turnTimerDeplete;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+  @keyframes turnTimerDeplete {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+  }
   .my-seat-wrap .status-line { min-height: 16px; margin-top: 4px; }
   .my-seat-wrap .cards {
     margin-top: 10px;
@@ -431,6 +462,9 @@
 <div class="my-seat-wrap" id="my-seat">
   <div class="label" id="my-label">you</div>
   <div class="stack" id="my-stack">--</div>
+  <div class="turn-timer-track" id="turn-timer-track">
+    <div class="turn-timer-fill" id="turn-timer-fill"></div>
+  </div>
   <div class="status-line" id="my-status"></div>
   <div class="cards" id="my-cards"></div>
 </div>
@@ -457,6 +491,11 @@
 <script>
 const TABLE_ID = "{{ table_id|escapejs }}";
 const PLAYER_ID = "{{ player_id|escapejs }}";
+// Mirrors table/tasks.py's TURN_TIMEOUT_SECONDS -- the countdown bar is
+// purely cosmetic, check_turn_timeouts() on the server is what actually
+// auto-folds a stalled turn, this is just told the same number so the two
+// don't silently drift apart.
+const TURN_TIMEOUT_SECONDS = {{ turn_timeout_seconds }};
 const SUIT_SYMBOL = { Hearts: "♥", Diamonds: "♦", Clubs: "♣", Spades: "♠" };
 const RED_SUITS = new Set(["Hearts", "Diamonds"]);
 const RANK_LABEL = {
@@ -467,6 +506,7 @@ const RANK_LABEL = {
 let myHand = [];
 let latestState = null;
 let lastRenderedPot = null;
+let turnTimerRunning = false; // whether the countdown bar is currently depleting
 
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
@@ -481,6 +521,8 @@ const gameOverBanner = document.getElementById("game-over-banner");
 const gameOverText = document.getElementById("game-over-text");
 const btnPlayAgain = document.getElementById("btn-play-again");
 const mySeatWrap = document.getElementById("my-seat");
+const turnTimerTrack = document.getElementById("turn-timer-track");
+const turnTimerFill = document.getElementById("turn-timer-fill");
 
 function log(message, isError) {
   logEl.textContent = message;
@@ -686,6 +728,7 @@ function showShowdownReveal(state) {
   }
 
   btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = raiseInput.disabled = true;
+  stopTurnTimer(); // the hand just ended -- nothing left for the bar to count down
   btnContinue.style.display = "inline-block";
   btnContinue.onclick = () => {
     awaitingContinue = false;
@@ -703,6 +746,32 @@ function showShowdownReveal(state) {
     // reveal were dropped -- fetch the new hand's cards now.
     window.currentSocket.send(JSON.stringify({ type: "get_hand" }));
   };
+}
+
+// Starts (or restarts) the countdown bar depleting from full over
+// TURN_TIMEOUT_SECONDS. Re-triggering a CSS animation requires a reflow in
+// between removing and re-adding the class -- same trick as the pot-pulse
+// restart above -- otherwise the browser just no-ops since, as far as it's
+// concerned, the "running" class never actually left.
+function startTurnTimer() {
+  turnTimerRunning = true;
+  turnTimerTrack.classList.add("visible");
+  turnTimerFill.classList.remove("running", "urgent");
+  void turnTimerFill.offsetWidth; // force reflow so the animation restarts
+  turnTimerFill.style.animationDuration = TURN_TIMEOUT_SECONDS + "s";
+  turnTimerFill.classList.add("running");
+  clearTimeout(window.turnTimerUrgentTimeout);
+  // Last 4 seconds (or the whole bar, if the timeout is shorter than that)
+  // flip to red -- a shrinking yellow sliver is easy to miss at a glance.
+  const urgentAt = Math.max(0, TURN_TIMEOUT_SECONDS - 4);
+  window.turnTimerUrgentTimeout = setTimeout(() => turnTimerFill.classList.add("urgent"), urgentAt * 1000);
+}
+
+function stopTurnTimer() {
+  turnTimerRunning = false;
+  turnTimerTrack.classList.remove("visible");
+  turnTimerFill.classList.remove("running", "urgent");
+  clearTimeout(window.turnTimerUrgentTimeout);
 }
 
 function renderLiveState(state) {
@@ -728,6 +797,7 @@ function renderLiveState(state) {
       ? `${busted.map((s) => s.player).join(", ")} out of chips -- ${survivors.map((s) => s.player).join(", ") || "no one"} left standing.`
       : "Game over.", false);
     btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = raiseInput.disabled = true;
+    stopTurnTimer(); // the game just ended -- nothing left for the bar to count down
     gameOverText.textContent = mySeat && mySeat.stack > 0 ? "YOU WIN!" : "YOU LOSE";
     gameOverBanner.style.display = "flex";
     return;
@@ -808,6 +878,16 @@ function renderLiveState(state) {
     // goes straight through FLOP/TURN/RIVER/SHOWDOWN, never back to this.
     const dealt = state.round_state !== "PRE_FLOP";
     const canAct = dealt && myTurn && !mySeat.is_folded && !mySeat.is_all_in;
+    // Every broadcast re-renders from scratch, including ones that have
+    // nothing to do with my turn starting or ending (an opponent's action,
+    // a reconnect) -- only (re)start the bar on the actual transition into
+    // my turn, and only stop it on the transition out, or every unrelated
+    // broadcast while it's my turn would restart it from full again.
+    if (canAct && !turnTimerRunning) {
+      startTurnTimer();
+    } else if (!canAct && turnTimerRunning) {
+      stopTurnTimer();
+    }
     btnFold.disabled = !canAct;
     btnCheckCall.disabled = !canAct;
     btnRaise.disabled = !canAct;

@@ -19,6 +19,12 @@ log = structlog.get_logger(__name__)
 # not just this one's.
 BOT_ACTION_DELAY_SECONDS = 2
 
+# How long a real player has to act before check_turn_timeouts() auto-folds
+# them. The play UI's countdown bar (play.html) is told this same number via
+# the view's template context, rather than a second hardcoded "15" living in
+# the frontend that could silently drift out of sync with this one.
+TURN_TIMEOUT_SECONDS = 15
+
 
 @shared_task
 def bot_decide_task(table_id: str, player_id: str) -> None:
@@ -67,7 +73,7 @@ def check_turn_timeouts() -> None:
             # __init__(). Don't let one old/malformed table crash the whole
             # periodic tick for every other table.
             time_started = getattr(round_, "time_started", 0)
-            if time.time() - time_started > 15:
+            if time.time() - time_started > TURN_TIMEOUT_SECONDS:
                 timed_out_player = round_.seats[round_.current_turn_index].player
                 try:
                     # apply_action() refuses this for more than one reason
