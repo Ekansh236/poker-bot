@@ -50,6 +50,12 @@
     transition: transform 0.1s ease, background 0.15s ease;
   }
   #btn-invite:hover { background: #3a2a1a; transform: translateY(-1px); }
+  #btn-exit {
+    background: #3a1818; color: #e8b0a8; border: 1px solid #732a2a;
+    border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+    transition: transform 0.1s ease, background 0.15s ease;
+  }
+  #btn-exit:hover { background: #4a1f1f; transform: translateY(-1px); }
 
   #invite-box {
     display: none;
@@ -393,6 +399,7 @@
   <h1>Table "{{ table_id }}" &middot; playing as {{ player_id }}</h1>
   <div class="topbar-right">
     <button id="btn-invite">Invite</button>
+    <button id="btn-exit">Exit</button>
     <div id="status" class="disconnected">connecting&hellip;</div>
   </div>
 </div>
@@ -807,6 +814,12 @@ function connect() {
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
+    if (msg.type === "left") {
+      // Server has already freed the seat (and bot-filled it for whoever's
+      // still at the table) by the time this arrives -- safe to leave now.
+      window.location.href = "/";
+      return;
+    }
     if (msg.type === "hole_cards") {
       // A get_hand request we fired for the hand on screen can be answered
       // AFTER the bot has already resolved that hand and dealt a new one
@@ -859,6 +872,15 @@ function doRestart() {
 }
 btnRestart.addEventListener("click", doRestart);
 btnPlayAgain.addEventListener("click", doRestart);
+
+const btnExit = document.getElementById("btn-exit");
+btnExit.addEventListener("click", () => {
+  btnExit.disabled = true;
+  window.currentSocket.send(JSON.stringify({ type: "leave" }));
+  // The redirect happens once the server confirms (ws.onmessage, type
+  // "left") -- not immediately here, so the leave message is guaranteed
+  // to actually reach the server before this tab navigates away.
+});
 
 const inviteBox = document.getElementById("invite-box");
 const inviteLink = document.getElementById("invite-link");

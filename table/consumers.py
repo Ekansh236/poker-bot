@@ -110,6 +110,51 @@ class TableConsumer(AsyncWebsocketConsumer):
                     )
             return
 
+        if data.get("type") == "leave":
+            with registry.locked_round(self.table_id) as round_:
+                seat = registry.claim_seat(round_, self.player_id)
+                # A live, not-yet-resolved hand can't just lose a seat
+                # mid-stream -- fold them out of it first, same as a real
+                # player mucking and leaving the table. Only matters if
+                # they haven't already folded/busted/never been dealt in.
+                turn_advanced = False
+                if seat.cards is not None and not seat.is_folded and not seat.is_all_in:
+                    if round_.seats[round_.current_turn_index] is seat:
+                        round_.apply_action_and_advance(seat, "fold")
+                        turn_advanced = True
+                        if round_.last_showdown:
+                            await sync_to_async(persist_hand_result)(self.table_id, round_)
+                    else:
+                        seat.is_folded = True
+                # Free the seat -- seat_bot_if_needed() immediately refills
+                # it with a bot (same path a brand-new table's empty seats
+                # go through), so no seat is ever left "owned by nobody"
+                # for advance_turn()/blind-posting to stall on.
+                seat.player = None
+                seat.cards = None
+                seat.is_bot = False
+                registry.seat_bot_if_needed(round_)
+                log.info("player_left", table_id=self.table_id, player_id=self.player_id)
+
+                await self.send(text_data=json.dumps({"type": "left"}))
+                broadcast_payload = serialize_round(round_)
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {"type": "table.message", "message": broadcast_payload},
+                )
+                # Only dispatch if leaving is what just moved the turn to a
+                # bot -- if the leaving seat wasn't on the clock, whatever
+                # already holds the current turn already has its own
+                # dispatch scheduled from whenever it actually became
+                # their turn; re-dispatching here would double it up and
+                # the second one crashes once the first has already acted.
+                if turn_advanced and round_.seats[round_.current_turn_index].is_bot:
+                    bot_decide_task.apply_async(
+                        args=[self.table_id, round_.seats[round_.current_turn_index].player],
+                        countdown=BOT_ACTION_DELAY_SECONDS,
+                    )
+            return
+
         action = data.get("action")
         amount = data.get("amount")
 
