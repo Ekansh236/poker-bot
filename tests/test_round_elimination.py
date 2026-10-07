@@ -93,6 +93,79 @@ def test_busted_seat_posts_no_blind_and_never_acts():
     assert round_.seats[round_.button_index] is not b
 
 
+def test_real_showdown_with_a_busted_seat_still_at_the_table():
+    # C busted out in some earlier hand -- permanently is_all_in, cards
+    # None, not is_folded (see start_new_hand()'s reset guard). A and B
+    # now play this hand out to a REAL showdown (both call it down, both
+    # still holding cards) -- this used to crash building the revealed
+    # hands dict, since "not is_folded" alone still counted C as live.
+    round_ = make_round(3)
+    a, b, c = round_.seats
+    c.stack = 0
+    c.is_all_in = True
+    c.cards = None
+
+    a.cards = (Card(Rank.ACE, Suit.HEARTS), Card(Rank.ACE, Suit.SPADES))
+    b.cards = (Card(Rank.TWO, Suit.CLUBS), Card(Rank.THREE, Suit.DIAMONDS))
+    a.total_contributed_to_pot = 100
+    b.total_contributed_to_pot = 100
+    round_.pot = 200
+    round_.community_cards = [
+        Card(Rank.KING, Suit.HEARTS), Card(Rank.QUEEN, Suit.CLUBS), Card(Rank.JACK, Suit.SPADES),
+        Card(Rank.FOUR, Suit.HEARTS), Card(Rank.NINE, Suit.DIAMONDS),
+    ]
+
+    round_._resolve_showdown_and_start_new_hand()  # must not raise
+
+    assert "P2" not in round_.last_showdown["hands"]
+    assert "P0" in round_.last_showdown["hands"]
+    assert "P1" in round_.last_showdown["hands"]
+
+
+def test_busted_seat_contribution_tally_resets_each_hand():
+    # B busts this hand with a real contribution already on the books --
+    # start_new_hand() must not leave that stale total_contributed_to_pot
+    # sitting there forever, or compute_pots() keeps treating B as a real
+    # contributor in every future hand (see the showdown test above for
+    # what that crashes into).
+    round_ = make_round(3)
+    a, b, c = round_.seats
+    c.is_folded = True
+    a.cards = (Card(Rank.ACE, Suit.HEARTS), Card(Rank.ACE, Suit.SPADES))
+    b.cards = (Card(Rank.TWO, Suit.CLUBS), Card(Rank.THREE, Suit.DIAMONDS))
+    a.stack, a.total_contributed_to_pot = 400, 100
+    b.stack, b.is_all_in, b.total_contributed_to_pot = 0, True, 100
+    round_.pot = 200
+    round_.community_cards = [
+        Card(Rank.KING, Suit.HEARTS), Card(Rank.QUEEN, Suit.CLUBS), Card(Rank.JACK, Suit.SPADES),
+        Card(Rank.FOUR, Suit.HEARTS), Card(Rank.NINE, Suit.DIAMONDS),
+    ]
+
+    round_._resolve_showdown_and_start_new_hand()
+
+    assert b.total_contributed_to_pot == 0
+    assert b.bet_this_street == 0
+    assert b.is_all_in is True
+
+
+def test_seat_going_all_in_on_the_blind_itself_still_gets_dealt_in():
+    # B has fewer chips than the small blind -- put_in_pot() caps the post
+    # at B's whole stack, landing B at exactly 0 by the time dealing
+    # happens. B still contributed everything it had THIS hand and is a
+    # real participant, not an already-busted seat from a prior hand --
+    # it must still get cards.
+    round_ = make_round(3)
+    a, b, c = round_.seats
+    b.stack = 3  # less than SMALL_BLIND (5)
+    round_.button_index = 0  # a is the button -- b (next active) posts the small blind
+
+    round_.deal_hole_cards()
+
+    assert b.stack == 0
+    assert b.cards is not None
+    assert b.total_contributed_to_pot == 3
+
+
 def test_game_ends_once_only_one_seat_has_chips_left():
     round_ = make_round(3)
     a, b, c = round_.seats

@@ -73,6 +73,15 @@ class Round:
         if RoundState.PRE_FLOP != self.current_round_state:
             raise ValueError("Hole cards can only be dealt during the PRE_FLOP round state.")
 
+        # Captured BEFORE blinds are posted -- a seat with fewer chips than
+        # its blind goes all-in paying it (put_in_pot() caps at their
+        # stack), landing at stack 0 by the time the dealing loop below
+        # would otherwise check "stack > 0". That seat is still a real
+        # participant THIS hand (it contributed everything it had and
+        # still contests the pot), not an already-busted seat from a prior
+        # hand -- only the latter should be skipped for dealing.
+        still_playing = [seat.stack > 0 for seat in self.seats]
+
         # Heads-up and 3+-handed follow genuinely different blind/turn-order
         # rules, not just "more seats": heads-up, the button posts the small
         # blind and acts first preflop; 3+ handed, the button posts nothing,
@@ -96,12 +105,12 @@ class Round:
             self.current_turn_index = self._next_active_seat_index(big_blind_index)
 
         self.current_bet_to_match = self.BIG_BLIND  # Always BIG_BLIND regardless of seat count.
-        for seat in self.seats:
-            if seat.stack > 0:
+        for seat, was_playing in zip(self.seats, still_playing):
+            if was_playing:
                 seat.cards = (self.deck.deal_card(), self.deck.deal_card())
                 seat.has_acted_this_street = False  # Reset action status for the new hand
             else:
-                seat.cards = None  # Busted -- no hand to hold, not even a stale one.
+                seat.cards = None  # Already busted entering this hand -- no hand to hold.
         self.current_round_state = RoundState.FLOP  # Transition to FLOP state after dealing hole cards
 
     def start_new_hand(self):
@@ -116,6 +125,18 @@ class Round:
         for seat in self.seats:
             if seat.stack > 0:
                 seat.reset_for_new_hand()
+            else:
+                # Busted -- stays excluded (is_all_in so advance_turn() and
+                # blind posting skip it, no cards so it's never dealt back
+                # in), but this hand's tallies must still reset to 0 like
+                # everyone else's. Leaving a stale total_contributed_to_pot
+                # from whichever hand busted it would make compute_pots()
+                # keep treating it as a real contributor at that old level
+                # forever, pulling it into showdown_resolution() with no
+                # cards to evaluate.
+                seat.bet_this_street = 0
+                seat.total_contributed_to_pot = 0
+                seat.is_all_in = True
         self.community_cards = []
         self.pot = 0
         self.deck = Deck()
@@ -198,8 +219,15 @@ class Round:
         # real poker table mucking a folded hand. Only include hole cards
         # when seats genuinely went to showdown against each other.
         is_real_showdown = not self.check_if_all_but_one_folded()
+        # A busted seat is permanently is_all_in, never is_folded (see
+        # start_new_hand()'s reset guard) -- "not is_folded" alone still
+        # counts it as live, but its cards are None (deal_hole_cards()
+        # never deals it back in), so this crashes the moment any table
+        # that's had an elimination reaches a real showdown among whoever
+        # is actually still playing.
         hands = (
-            {seat.player: [card.to_dict() for card in seat.cards] for seat in self.seats if not seat.is_folded}
+            {seat.player: [card.to_dict() for card in seat.cards]
+             for seat in self.seats if not seat.is_folded and seat.cards is not None}
             if is_real_showdown
             else {}
         )

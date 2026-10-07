@@ -17,7 +17,7 @@ log = structlog.get_logger(__name__)
 # apply_async(countdown=...) rather than time.sleep() -- this worker runs
 # --pool=solo, so a real sleep would block every other table's bots too,
 # not just this one's.
-BOT_ACTION_DELAY_SECONDS = 4
+BOT_ACTION_DELAY_SECONDS = 2
 
 
 @shared_task
@@ -67,9 +67,20 @@ def check_turn_timeouts() -> None:
             # __init__(). Don't let one old/malformed table crash the whole
             # periodic tick for every other table.
             time_started = getattr(round_, "time_started", 0)
-            if time.time() - time_started > 30:
+            if time.time() - time_started > 15:
                 timed_out_player = round_.seats[round_.current_turn_index].player
-                round_.apply_action_and_advance(seat=round_.seats[round_.current_turn_index], action="fold", amount=0)
+                try:
+                    # apply_action() refuses this for more than one reason
+                    # (game_over, no hand dealt yet, and possibly more in
+                    # future) -- a finished or not-yet-started table's
+                    # time_started is always stale, so every one of them
+                    # would otherwise hit this same check every single tick
+                    # and crash it. Nothing useful to do on a legitimate
+                    # refusal except leave that table alone and move on.
+                    round_.apply_action_and_advance(seat=round_.seats[round_.current_turn_index], action="fold", amount=0)
+                except ValueError as e:
+                    log.debug("turn_timeout_skipped", table_id=table_id, reason=str(e))
+                    continue
                 log.info("turn_timed_out", table_id=table_id, player_id=timed_out_player)
                 if round_.last_showdown:
                     persist_hand_result(table_id, round_)

@@ -122,8 +122,10 @@ celery -A config flower --port=5555
 WebSocket tables are reachable directly at `ws://localhost:8000/ws/table/<table_id>/<player_id>/`,
 or play a full game in a browser at `http://localhost:8000/play/<table_id>/<player_id>/` (e.g.
 `http://localhost:8000/play/table1/alice/`) — `table_id`/`player_id` are arbitrary names you choose.
-Only Redis, `runserver`, and a Celery worker are required to actually play; Beat and Flower are
-optional extras (Beat enables the 30s inactivity auto-fold, Flower is just a monitoring dashboard).
+Redis, `runserver`, and a Celery worker are required to actually play. Beat is required too for
+the 15s inactivity auto-fold to actually fire (`celery -A config beat`, its own process, separate
+from the worker) -- the game still runs without it, just with that one feature silently inert.
+Flower is a genuinely optional monitoring dashboard.
 Flower's dashboard is at `http://localhost:5555`.
 
 ## Known gaps (tracked, not hidden)
