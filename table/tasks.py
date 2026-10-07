@@ -17,7 +17,7 @@ log = structlog.get_logger(__name__)
 # apply_async(countdown=...) rather than time.sleep() -- this worker runs
 # --pool=solo, so a real sleep would block every other table's bots too,
 # not just this one's.
-BOT_ACTION_DELAY_SECONDS = 7
+BOT_ACTION_DELAY_SECONDS = 4
 
 
 @shared_task

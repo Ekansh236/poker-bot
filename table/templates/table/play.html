@@ -10,14 +10,13 @@
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    /* Classic casino red/black/gold instead of a plain dark void -- a
-       deep red-tinted vignette on near-black, same family as the felt
-       and trim below instead of a disconnected neutral backdrop. */
+    /* Bright, lively casino red/gold -- a saturated wine-red vignette,
+       lighter than near-black, so the room doesn't read as dark/broody. */
     background:
-      radial-gradient(ellipse 90% 55% at 50% 12%, rgba(139,0,30,0.22), transparent 62%),
-      radial-gradient(ellipse 130% 85% at 50% 100%, #2a0a10 0%, #0d0305 70%);
-    background-color: #0a0305;
-    color: #f0e6d2;
+      radial-gradient(ellipse 90% 55% at 50% 12%, rgba(230,40,70,0.3), transparent 62%),
+      radial-gradient(ellipse 130% 85% at 50% 100%, #6b1f32 0%, #2e0f1a 70%);
+    background-color: #2e0f1a;
+    color: #fff4e0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -45,24 +44,24 @@
   .topbar-right { display: flex; align-items: center; gap: 10px; }
 
   #btn-invite {
-    background: #2a1f14; color: #e8cf9a; border: 1px solid #6b4a24;
+    background: #6b4428; color: #ffe3b0; border: 1px solid #c4863a;
     border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
     transition: transform 0.1s ease, background 0.15s ease;
   }
-  #btn-invite:hover { background: #3a2a1a; transform: translateY(-1px); }
+  #btn-invite:hover { background: #8a5a34; transform: translateY(-1px); }
   #btn-exit {
-    background: #3a1818; color: #e8b0a8; border: 1px solid #732a2a;
+    background: #96283e; color: #ffd4da; border: 1px solid #d94f68;
     border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
     transition: transform 0.1s ease, background 0.15s ease;
   }
-  #btn-exit:hover { background: #4a1f1f; transform: translateY(-1px); }
+  #btn-exit:hover { background: #b5324c; transform: translateY(-1px); }
 
   #invite-box {
     display: none;
     width: 100%;
     max-width: 880px;
-    background: #241a10;
-    border: 1px solid #d4af6a;
+    background: #5c3620;
+    border: 1px solid #f0c860;
     border-radius: 8px;
     padding: 10px 14px;
     margin-bottom: 10px;
@@ -75,11 +74,11 @@
   #invite-link {
     flex: 1;
     min-width: 180px;
-    background: #140e08;
-    border: 1px solid #6b4a24;
+    background: #3a2114;
+    border: 1px solid #c4863a;
     border-radius: 5px;
     padding: 6px 8px;
-    color: #e8cf9a;
+    color: #ffe3b0;
     font-size: 12px;
   }
   #btn-copy-invite {
@@ -120,20 +119,19 @@
   .table-oval {
     position: absolute;
     inset: 0;
-    /* Deep casino red felt (the classic alternative to green) instead
-       of a green/brown room -- black rail + gold piping is the same
-       combo real casino tables use. */
-    background: radial-gradient(ellipse at 50% 38%, #9a1f2e 0%, #731520 48%, #4a0c14 78%, #2e060c 100%);
-    border: 9px solid #141010;
+    /* Bright, saturated cardinal-red felt -- a warm wood rail instead of
+       black, so the whole table reads as lively rather than funereal. */
+    background: radial-gradient(ellipse at 50% 38%, #f2384f 0%, #e01b3d 40%, #b5142f 72%, #8a0f24 100%);
+    border: 9px solid #8a5a2e;
     border-radius: 50%;
-    /* Gold inlay ring between the black rail and the felt, like a real
-       table's trim -- plus a deeper vignette for more contrast/depth
-       than a flat fill. */
+    /* Gold inlay ring between the wood rail and the felt, like a real
+       table's trim -- plus a lighter vignette for depth without going
+       as dark as before. */
     box-shadow:
-      inset 0 0 0 3px #d4af6a,
-      inset 0 0 55px rgba(0,0,0,0.55),
-      inset 0 10px 40px rgba(0,0,0,0.3),
-      0 14px 34px rgba(0,0,0,0.65);
+      inset 0 0 0 3px #f0c860,
+      inset 0 0 55px rgba(0,0,0,0.4),
+      inset 0 10px 40px rgba(0,0,0,0.2),
+      0 14px 34px rgba(0,0,0,0.5);
   }
 
   .center-content {
@@ -198,8 +196,8 @@
     background:
       repeating-linear-gradient(45deg, rgba(212,175,106,0.28) 0 2.5px, transparent 2.5px 7px),
       repeating-linear-gradient(-45deg, rgba(212,175,106,0.28) 0 2.5px, transparent 2.5px 7px),
-      #1c2b52;
-    border: 1.5px solid #d4af6a;
+      #2a4a9e;
+    border: 1.5px solid #f0c860;
     box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 0 0 2px rgba(0,0,0,0.25);
     color: transparent;
   }
@@ -306,9 +304,9 @@
     justify-content: center;
   }
   button.action-btn {
-    background: #1f4a38;
-    color: #eee;
-    border: 1px solid #3a7a5c;
+    background: #1f9e6b;
+    color: #fff;
+    border: 1px solid #4ad896;
     border-radius: 6px;
     padding: 10px 16px;
     font-size: 14px;
@@ -316,22 +314,22 @@
     transition: transform 0.08s ease, background 0.15s ease, box-shadow 0.15s ease;
   }
   button.action-btn:disabled { opacity: 0.35; cursor: default; }
-  button.action-btn:not(:disabled):hover { background: #2a6b4e; transform: translateY(-1px); }
+  button.action-btn:not(:disabled):hover { background: #26c17f; transform: translateY(-1px); }
   button.action-btn:not(:disabled):active { transform: translateY(0) scale(0.96); }
   /* Color-code by action meaning, same language as the action badges:
      fold = danger red, raise = aggressive gold. Breaks up what was an
      all-green button row. */
-  button.action-btn.fold { background: #5c2029; border-color: #8a3540; }
-  button.action-btn.fold:not(:disabled):hover { background: #732a35; }
-  button.action-btn#btn-raise { background: #6b4a14; border-color: #d4af6a; }
-  button.action-btn#btn-raise:not(:disabled):hover { background: #8a611c; }
+  button.action-btn.fold { background: #c5324c; border-color: #ef6b82; }
+  button.action-btn.fold:not(:disabled):hover { background: #da4360; }
+  button.action-btn#btn-raise { background: #c4902e; border-color: #f0c860; }
+  button.action-btn#btn-raise:not(:disabled):hover { background: #d9a73e; }
   input[type=number] {
     width: 80px;
     padding: 9px 8px;
     border-radius: 6px;
-    border: 1px solid #444;
-    background: #1c1c1c;
-    color: #eee;
+    border: 1px solid #c4863a;
+    background: #3a2114;
+    color: #fff4e0;
   }
 
   #log {
@@ -352,10 +350,10 @@
     gap: 14px;
     margin-top: 20px;
     padding: 22px 32px;
-    background: #241a10;
+    background: #5c3620;
     border: 2px solid #ffd54a;
     border-radius: 12px;
-    box-shadow: 0 0 30px rgba(255,213,74,0.25);
+    box-shadow: 0 0 30px rgba(255,213,74,0.3);
   }
   #game-over-text {
     font-size: 24px;
