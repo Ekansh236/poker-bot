@@ -27,14 +27,18 @@
 
   .topbar {
     width: 100%;
-    max-width: 760px;
+    max-width: 880px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 10px;
   }
-  .topbar h1 { font-size: 14px; font-weight: 500; opacity: 0.75; margin: 0; }
+  .topbar h1 {
+    font-size: 14px; font-weight: 500; opacity: 0.75; margin: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex: 1; min-width: 0;
+  }
   #status { font-size: 11px; opacity: 0.65; }
   #status.connected { color: #6fdc8c; }
   #status.disconnected { color: #e06c6c; }
@@ -50,7 +54,7 @@
   #invite-box {
     display: none;
     width: 100%;
-    max-width: 760px;
+    max-width: 880px;
     background: #241a10;
     border: 1px solid #d4af6a;
     border-radius: 8px;
@@ -80,7 +84,7 @@
   /* -- "what's going on" banner -- */
   #event-banner {
     width: 100%;
-    max-width: 760px;
+    max-width: 880px;
     text-align: center;
     font-size: 13px;
     min-height: 20px;
@@ -95,10 +99,17 @@
   /* -- the oval table -- */
   .table-wrap {
     width: 100%;
-    max-width: 760px;
+    max-width: 880px;
     aspect-ratio: 16 / 11;
     position: relative;
     margin-top: 6px;
+  }
+  @media (max-width: 560px) {
+    /* Taller/narrower ratio on a phone -- the 16:11 desktop ratio gets
+       too short to fit several seats readably at phone width. Seat
+       positions are computed in percentages (see positionOpponentSeats),
+       so they adapt automatically to whatever ratio is in effect. */
+    .table-wrap { aspect-ratio: 3 / 4; }
   }
   .table-oval {
     position: absolute;
@@ -147,6 +158,37 @@
     40% { transform: scale(1.3); color: #fff2c4; }
     100% { transform: scale(1); }
   }
+
+  /* -- poker chips, decorative but also used for the bet-in-front badge -- */
+  .chip {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    display: inline-block;
+    border: 2px dashed rgba(255,255,255,0.65);
+    box-shadow: 0 2px 3px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(0,0,0,0.25);
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.45), transparent 55%), var(--chip-color, #b5384a);
+  }
+  .chip.gold { --chip-color: #d4af6a; }
+  .chip.red { --chip-color: #b5384a; }
+  .chip.black { --chip-color: #241c16; border-color: rgba(212,175,106,0.55); }
+  .chip.blue { --chip-color: #2a4a7a; }
+  .pot-chips {
+    display: flex;
+    justify-content: center;
+    height: 22px;
+  }
+  .pot-chips .chip { width: 22px; height: 22px; margin-left: -9px; }
+  .pot-chips .chip:first-child { margin-left: 0; }
+  .bet-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #f0e6d2;
+  }
+  .seat-chip-icon { width: 13px; height: 13px; margin-right: 3px; vertical-align: -2px; }
 
   .cards { display: flex; gap: 5px; justify-content: center; }
   .card {
@@ -242,7 +284,7 @@
   /* -- my seat, anchored below the table -- */
   .my-seat-wrap {
     width: 100%;
-    max-width: 760px;
+    max-width: 880px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -262,12 +304,14 @@
   .my-seat-wrap .stack { font-size: 15px; margin-top: 2px; }
   .my-seat-wrap .status-line { min-height: 16px; margin-top: 4px; }
   .my-seat-wrap .cards {
-    margin-top: 8px;
-    transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
+    margin-top: 10px;
+    transition: transform 0.2s cubic-bezier(.34,1.56,.64,1);
   }
   /* My own cards enlarge when it's actually my turn. */
-  .my-seat-wrap.active-turn .cards { transform: scale(1.15); }
-  .my-seat-wrap .card { width: 40px; height: 56px; font-size: 15px; }
+  .my-seat-wrap.active-turn .cards { transform: scale(1.1); }
+  /* Noticeably bigger than before -- these are the one set of cards the
+     player actually reads, worth the extra size. */
+  .my-seat-wrap .card { width: 60px; height: 84px; font-size: 22px; border-radius: 7px; }
 
   .actions {
     margin-top: 16px;
@@ -307,7 +351,7 @@
   }
 
   #log {
-    max-width: 760px;
+    max-width: 880px;
     width: 100%;
     margin-top: 10px;
     font-size: 12px;
@@ -348,11 +392,22 @@
   .btn-prominent:hover { background: #ffe07a; }
 
   @media (max-width: 480px) {
-    .seat { width: 72px; padding: 5px 4px 4px; }
+    body { padding: 8px 8px 16px; }
+    .topbar h1 { font-size: 12px; }
+    .seat { width: 68px; padding: 5px 4px 4px; }
     .seat .label { font-size: 10px; }
     .seat .stack { font-size: 10px; }
     .seat .card { width: 20px; height: 28px; }
     .pot-display { font-size: 15px; }
+    .pot-chips .chip { width: 18px; height: 18px; }
+    .chip, .seat-chip-icon { width: 11px; height: 11px; }
+    /* Still bigger than the pre-redesign size, just not the full desktop
+       bump -- 60x84 would eat too much of a phone's width next to the
+       action buttons below it. */
+    .my-seat-wrap .card { width: 50px; height: 70px; font-size: 18px; }
+    .actions { gap: 6px; }
+    button.action-btn { padding: 9px 12px; font-size: 13px; }
+    input[type=number] { width: 64px; }
   }
 </style>
 </head>
@@ -380,6 +435,10 @@
   <div class="center-content">
     <div class="street-banner" id="round-state">--</div>
     <div class="cards" id="community-cards"></div>
+    <div class="pot-chips" id="pot-chips">
+      <span class="chip gold"></span><span class="chip red"></span>
+      <span class="chip black"></span><span class="chip blue"></span>
+    </div>
     <div class="pot-display" id="pot">Pot: --</div>
   </div>
 </div>
@@ -521,6 +580,16 @@ function actionBadgeEl(lastAction) {
   el.className = "action-badge " + cls;
   el.textContent = lastAction.is_all_in ? "ALL IN" : lastAction.action.toUpperCase() +
     (lastAction.action === "raise" ? " " + lastAction.bet_this_street : "");
+  return el;
+}
+
+function betBadgeEl(amount) {
+  const el = document.createElement("span");
+  el.className = "bet-badge";
+  const chip = document.createElement("span");
+  chip.className = "chip red seat-chip-icon";
+  el.appendChild(chip);
+  el.appendChild(document.createTextNode(String(amount)));
   return el;
 }
 
@@ -667,6 +736,7 @@ function renderLiveState(state) {
   document.getElementById("round-state").textContent = state.round_state.replace("_", " ");
   const potEl = document.getElementById("pot");
   potEl.textContent = "Pot: " + state.pot;
+  document.getElementById("pot-chips").style.visibility = state.pot > 0 ? "visible" : "hidden";
   if (state.pot !== lastRenderedPot) {
     potEl.classList.remove("pot-pulse");
     void potEl.offsetWidth; // force reflow so the animation restarts
@@ -692,7 +762,10 @@ function renderLiveState(state) {
     const isActive = state.current_turn === oppSeat.player;
     seatEl.classList.toggle("active-turn", isActive);
     seatEl.querySelector(".label").textContent = oppSeat.player + (oppSeat.is_bot ? " (bot)" : "");
-    seatEl.querySelector(".stack").textContent = "Stack: " + oppSeat.stack;
+    const stackEl = seatEl.querySelector(".stack");
+    stackEl.innerHTML = "";
+    stackEl.appendChild(Object.assign(document.createElement("span"), { className: "chip gold seat-chip-icon" }));
+    stackEl.appendChild(document.createTextNode(String(oppSeat.stack)));
     // Opponents' hole cards are never sent to us -- always render face-down
     // if they still have a hand in this street (i.e. haven't folded/busted).
     renderCards(seatEl.querySelector(".cards"), [], (oppSeat.is_folded || oppSeat.stack <= 0) ? 0 : 2);
@@ -706,13 +779,16 @@ function renderLiveState(state) {
     } else if (state.last_action && state.last_action.player === oppSeat.player) {
       statusLine.appendChild(actionBadgeEl(state.last_action));
     } else if (oppSeat.bet_this_street) {
-      statusLine.textContent = "Bet: " + oppSeat.bet_this_street;
+      statusLine.appendChild(betBadgeEl(oppSeat.bet_this_street));
     }
   });
 
   if (mySeat) {
     mySeatWrap.classList.toggle("active-turn", myTurn);
-    document.getElementById("my-stack").textContent = "Stack: " + mySeat.stack;
+    const myStackEl = document.getElementById("my-stack");
+    myStackEl.innerHTML = "";
+    myStackEl.appendChild(Object.assign(document.createElement("span"), { className: "chip gold seat-chip-icon" }));
+    myStackEl.appendChild(document.createTextNode(String(mySeat.stack)));
     renderCards(document.getElementById("my-cards"), myHand);
 
     const myStatusLine = document.getElementById("my-status");
@@ -722,7 +798,7 @@ function renderLiveState(state) {
     } else if (state.last_action && state.last_action.player === PLAYER_ID) {
       myStatusLine.appendChild(actionBadgeEl(state.last_action));
     } else if (mySeat.bet_this_street) {
-      myStatusLine.textContent = "Bet: " + mySeat.bet_this_street;
+      myStatusLine.appendChild(betBadgeEl(mySeat.bet_this_street));
     }
 
     const amountToCall = state.current_bet_to_match - mySeat.bet_this_street;
