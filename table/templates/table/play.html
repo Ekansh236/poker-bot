@@ -103,17 +103,15 @@
 
   /* -- the oval table -- */
   .table-wrap {
-    width: 100%;
-    max-width: 880px;
+    /* The fix for "I have to scroll to reach the buttons" needs BOTH
+       dimensions to shrink together on a short window, not just height --
+       max-height alone caps height while width stays at its full 880px,
+       which flattens the 16:9 box into a squashed, overly oval shape.
+       Deriving the width cap from the SAME 40vh height budget (via the
+       16/9 ratio) keeps the box actually proportional -- it shrinks as a
+       whole, never just gets squashed. */
+    width: min(100%, 880px, 71.1vh);
     aspect-ratio: 16 / 9;
-    /* The real fix for "I have to scroll to reach the buttons" -- aspect-
-       ratio alone only reacts to width, never to how tall the actual
-       browser window is. Capping height to a fraction of the viewport
-       (and letting the browser shrink width along with it, which
-       aspect-ratio boxes do automatically once a max-height constraint
-       is in the mix) means a short window gets a smaller table instead
-       of pushing everything below it off-screen. */
-    max-height: 40vh;
     position: relative;
     margin-top: 4px;
   }
@@ -121,8 +119,9 @@
     /* Taller/narrower ratio on a phone -- a flat 16:9 gets too short to
        fit several seats readably at phone width. Seat positions are
        computed in percentages (see positionOpponentSeats), so they adapt
-       automatically to whatever ratio is in effect. */
-    .table-wrap { aspect-ratio: 3 / 4; max-height: 48vh; }
+       automatically to whatever ratio is in effect. 64vh = 48vh * 4/3,
+       the same "derive the width cap from the height budget" fix as above. */
+    .table-wrap { width: min(100%, 64vh); aspect-ratio: 3 / 4; }
   }
   .table-oval {
     position: absolute;
