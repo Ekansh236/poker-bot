@@ -21,12 +21,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-rafhjuw%!18glp!(z8g+9y5ty=lo)_@^tq7703ilhl*vrj#4(g'
+# The hardcoded fallback only ever runs locally outside Docker (`python
+# manage.py runserver` with no .env) -- every other environment, including
+# docker-compose, sets POKER_SECRET_KEY explicitly (see .env.example).
+SECRET_KEY = os.environ.get(
+    'POKER_SECRET_KEY', 'django-insecure-rafhjuw%!18glp!(z8g+9y5ty=lo)_@^tq7703ilhl*vrj#4(g'
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('POKER_DEBUG', 'true').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [h for h in os.environ.get('POKER_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]
 
 
 # Application definition
@@ -74,19 +79,26 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
+# 127.0.0.1 is correct for every process running directly on the host (how
+# this has run all along); inside docker-compose, Redis is a separate
+# container reachable only by its service name, so POKER_REDIS_HOST=redis
+# overrides this there (see docker-compose.yml / .env.example).
+POKER_REDIS_HOST = os.environ.get('POKER_REDIS_HOST', '127.0.0.1')
+POKER_REDIS_PORT = int(os.environ.get('POKER_REDIS_PORT', '6379'))
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [('127.0.0.1', 6379)],
+            'hosts': [(POKER_REDIS_HOST, POKER_REDIS_PORT)],
         },
     },
 }
 
 # Same Redis instance as the channel layer above -- broker holds pending task
 # messages, result backend holds their return values once a worker finishes.
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
-CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0'
+CELERY_BROKER_URL = f'redis://{POKER_REDIS_HOST}:{POKER_REDIS_PORT}/0'
+CELERY_RESULT_BACKEND = f'redis://{POKER_REDIS_HOST}:{POKER_REDIS_PORT}/0'
 
 
 # Database

@@ -1,0 +1,9 @@
+django
+psycopg[binary]
+channels
+channels_redis
+daphne
+redis>=5,<6
+celery
+structlog
+flower

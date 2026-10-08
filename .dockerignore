@@ -1,0 +1,16 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+*.egg-info
+.env
+.DS_Store
+db.sqlite3
+.vscode
+celerybeat-schedule.db
+README.md
+CLAUDE.md
+.claude

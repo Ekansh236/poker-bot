@@ -11,14 +11,15 @@ by hand; framework boilerplate and infra glue are the only parts scaffolded dire
 
 | Milestone | Status |
 |---|---|
-| 1. Data modeling | In progress — real Postgres DB wired up, `accounts` app scaffolded; User/Table/Hand/Balance models not yet written |
+| 1. Data modeling | In progress — real Postgres DB wired up; `Table`/`Hand` (table app) and `Transaction` (accounts app) models written and migrated. Still uses Django's default `auth.User`, no dedicated Balance model (derived from `Transaction` instead) |
 | 2. Pure Python Texas Hold'em engine | Complete — 59 passing tests |
 | 3. Real-time WebSockets + Redis game state | Complete — verified live with real WebSocket connections |
 | 4. Autonomous bot engine (Monte Carlo + pot odds + real Celery dispatch) | Complete |
 | 4.5. Blinds, button rotation, position-aware bot decisions, live auto-advancement | Complete |
 | 5. Celery Beat turn-timeouts, structlog, Flower monitoring | Complete |
 | 6. Stripe/VIP tiers | Dropped — no real payments in this project |
-| 7-9. AI coach, React frontend, Docker/CI | Not started |
+| 7-8. AI coach, React frontend | Not started |
+| 9. Dockerization + CI | Complete — docker-compose runs the whole stack (Postgres, Redis, web, worker, Beat, Flower); GitHub Actions runs the test suite against real Postgres + Redis on every push. Performance/concurrency testing not started |
 
 Also built ahead of schedule: a minimal local play UI (`table/templates/table/play.html`) to actually
 play a full game against the bot in a browser, independent of the real Milestone 8 React frontend.
@@ -90,16 +91,35 @@ config/asgi.py ──► table/routing.py ──► table/consumers.py (TableCon
 ## Tech stack
 
 Python · Django · Django Channels · Redis · Celery + Celery Beat · Flower · structlog ·
-PostgreSQL (planned) · React/TypeScript (planned) · pytest
+PostgreSQL · Docker + docker-compose · GitHub Actions · React/TypeScript (planned) · pytest
 
-## Running it locally
+## Running it with Docker
+
+```bash
+cp .env.example .env    # then edit POKER_SECRET_KEY etc. for anything beyond local dev
+docker compose up --build
+```
+
+This brings up every service in `docker-compose.yml` -- Postgres, Redis, the Daphne-served web
+app (migrating itself on boot), a Celery worker, Celery Beat, and Flower. The app is at
+`http://localhost:8000`, Flower at `http://localhost:5555`. Postgres data persists in the
+`postgres_data` named volume across restarts; `docker compose down -v` wipes it. The repo is
+bind-mounted into the containers, so editing a `.py` file on the host and restarting the relevant
+service (`docker compose restart web`) picks it up without a rebuild -- a rebuild is only needed
+after changing `requirements.txt` or the `Dockerfile` itself.
+
+## Running it locally (without Docker)
 
 ```bash
 # Install dependencies
 pip install -r requirements-dev.txt
 
-# Start Redis (macOS/Homebrew)
+# Start Postgres and Redis (macOS/Homebrew)
+brew services start postgresql@16
 brew services start redis
+
+# Apply migrations (first time, and after pulling new ones)
+python manage.py migrate
 
 # Run the test suite
 pytest
@@ -109,7 +129,8 @@ python manage.py runserver
 
 # Run a Celery worker (bot decisions + turn-timeout auto-folds) -- separate
 # terminal. --pool=solo works around a macOS-specific prefork-pool crash,
-# unrelated to application code.
+# unrelated to application code. Not needed in Docker -- see
+# docker-compose.yml's worker service for why.
 celery -A config worker --pool=solo --loglevel=info
 
 # Run Celery Beat (fires check_turn_timeouts every 5s) -- separate terminal
@@ -122,17 +143,23 @@ celery -A config flower --port=5555
 WebSocket tables are reachable directly at `ws://localhost:8000/ws/table/<table_id>/<player_id>/`,
 or play a full game in a browser at `http://localhost:8000/play/<table_id>/<player_id>/` (e.g.
 `http://localhost:8000/play/table1/alice/`) — `table_id`/`player_id` are arbitrary names you choose.
-Redis, `runserver`, and a Celery worker are required to actually play. Beat is required too for
-the 15s inactivity auto-fold to actually fire (`celery -A config beat`, its own process, separate
-from the worker) -- the game still runs without it, just with that one feature silently inert.
-Flower is a genuinely optional monitoring dashboard.
+Postgres, Redis, `runserver`, and a Celery worker are required to actually play. Beat is required
+too for the 15s inactivity auto-fold to actually fire (`celery -A config beat`, its own process,
+separate from the worker) -- the game still runs without it, just with that one feature silently
+inert. Flower is a genuinely optional monitoring dashboard.
 Flower's dashboard is at `http://localhost:5555`.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push/PR to `main`: real Postgres + Redis service
+containers, `manage.py check`, `makemigrations --check --dry-run` (fails the build if a model
+changed without a matching migration), `migrate`, then the full `pytest` suite.
 
 ## Known gaps (tracked, not hidden)
 
-- No real database yet — `table/models.py` is empty and `settings.py` still points at the default
-  SQLite file. Milestone 1 was conceptual/architectural, not actual Django models. Needed before
-  Milestone 6 (Stripe/VIP tiers) or any real user accounts.
+- Performance/concurrency testing (the other half of Milestone 9) hasn't been done yet -- no load
+  testing against the WebSocket layer or the Redis-backed distributed lock under real concurrent
+  writers.
 - `poker_engine/starting_hands.py`'s 169-hand preflop strength chart is built but not wired into
   `decide_action()` — the bot currently decides preflop raises purely from Monte Carlo equity.
 - Bankroll/elimination is minimal — `Round.game_over` correctly ends a heads-up game once a seat

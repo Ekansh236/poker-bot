@@ -1,4 +1,5 @@
 import contextlib
+import os
 import pickle
 
 import redis
@@ -12,8 +13,15 @@ LOCK_TIMEOUT_SECONDS = 10  # safety valve -- auto-releases if a worker crashes m
 BOT_PLAYER_ID = "bot"
 
 # Same host/port as CHANNEL_LAYERS in settings.py -- one Redis instance backs
-# both the pub/sub channel layer and this shared game-state store.
-redis_client = redis.Redis(host='127.0.0.1', port=6379, db=0)
+# both the pub/sub channel layer and this shared game-state store. Mirrors
+# settings.py's own POKER_REDIS_HOST/POKER_REDIS_PORT env vars directly
+# rather than importing django.conf.settings, since this module has no other
+# reason to depend on Django being configured.
+redis_client = redis.Redis(
+    host=os.environ.get('POKER_REDIS_HOST', '127.0.0.1'),
+    port=int(os.environ.get('POKER_REDIS_PORT', '6379')),
+    db=0,
+)
 
 
 def _new_round(num_seats: int = SEATS_PER_TABLE) -> Round:
