@@ -15,6 +15,16 @@ primary_region = "iad"
 [http_service]
   internal_port = 8000
   force_https = true
+  processes = ["app"]
+  # IMPORTANT: this app must stay pinned to exactly ONE running machine
+  # (`fly scale count 1`) -- Fly's default "spin up a second machine for
+  # zero-downtime deploys" behavior is actively WRONG here. Each machine
+  # runs its own independent in-process Redis (bin/start-fly.sh); with 2
+  # machines, a player and the bot that's supposed to be playing against
+  # them can land on different machines with different, disconnected
+  # game state. min_machines_running below does NOT prevent a second
+  # machine from being created on deploy -- re-run `fly scale count 1`
+  # if a deploy ever creates one.
   # A friend should be able to join without waiting through a cold start
   # -- unlike a typical stateless web app, this one keeps live game state
   # in the same machine's in-process Redis, so scaling to zero between
