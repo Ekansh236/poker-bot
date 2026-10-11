@@ -730,22 +730,33 @@ function showShowdownReveal(state) {
   btnFold.disabled = btnCheckCall.disabled = btnRaise.disabled = raiseInput.disabled = true;
   stopTurnTimer(); // the hand just ended -- nothing left for the bar to count down
   btnContinue.style.display = "inline-block";
-  btnContinue.onclick = () => {
-    awaitingContinue = false;
-    btnContinue.style.display = "none";
-    // Consume the showdown on this object, not just the awaitingContinue
-    // flag -- a get_hand response that was already in flight when the
-    // showdown broadcast arrived gets answered AFTER this click, and its
-    // handler re-renders via renderState(latestState). Without this,
-    // state.last_showdown is still truthy on that same object, so it
-    // re-enters showShowdownReveal and snaps the UI straight back to the
-    // frozen reveal -- stuck until a reload wipes latestState clean.
-    latestState.last_showdown = null;
-    renderLiveState(latestState);
-    // Any hole_cards responses that arrived while we were holding the
-    // reveal were dropped -- fetch the new hand's cards now.
-    window.currentSocket.send(JSON.stringify({ type: "get_hand" }));
-  };
+  btnContinue.onclick = continueFromShowdown;
+
+  // Auto-continues everyone after 5s instead of making each player click
+  // Continue individually -- clear any previous reveal's pending timer
+  // first, since a fast fold-win chain (this hand's reveal replaced by a
+  // brand new one before 5s is up) would otherwise leave an old timer
+  // armed to fire mid-way through the NEW reveal.
+  clearTimeout(window.showdownContinueTimeout);
+  window.showdownContinueTimeout = setTimeout(continueFromShowdown, 5000);
+}
+
+function continueFromShowdown() {
+  clearTimeout(window.showdownContinueTimeout);
+  awaitingContinue = false;
+  btnContinue.style.display = "none";
+  // Consume the showdown on this object, not just the awaitingContinue
+  // flag -- a get_hand response that was already in flight when the
+  // showdown broadcast arrived gets answered AFTER this fires, and its
+  // handler re-renders via renderState(latestState). Without this,
+  // state.last_showdown is still truthy on that same object, so it
+  // re-enters showShowdownReveal and snaps the UI straight back to the
+  // frozen reveal -- stuck until a reload wipes latestState clean.
+  latestState.last_showdown = null;
+  renderLiveState(latestState);
+  // Any hole_cards responses that arrived while we were holding the
+  // reveal were dropped -- fetch the new hand's cards now.
+  window.currentSocket.send(JSON.stringify({ type: "get_hand" }));
 }
 
 // Starts (or restarts) the countdown bar depleting from full over
@@ -1009,7 +1020,9 @@ raiseInput.addEventListener("keydown", (e) => {
 });
 function doRestart() {
   // A restart makes any reveal currently on screen stale immediately --
-  // don't wait for a Continue click on a hand that no longer exists.
+  // don't wait for a Continue click (or the auto-continue timer) on a
+  // hand that no longer exists.
+  clearTimeout(window.showdownContinueTimeout);
   awaitingContinue = false;
   btnContinue.style.display = "none";
   gameOverBanner.style.display = "none";
