@@ -155,6 +155,43 @@ Flower's dashboard is at `http://localhost:5555`.
 containers, `manage.py check`, `makemigrations --check --dry-run` (fails the build if a model
 changed without a matching migration), `migrate`, then the full `pytest` suite.
 
+## Deploying (Fly.io)
+
+Deployed for actual friends-over-the-internet play, not just local docker-compose parity. This
+needs real money (a few $/month, see below), unlike everything above.
+
+**Why one machine, not docker-compose's four services:** `fly.toml` runs `bin/start-fly.sh`,
+which starts Redis + the web app + the Celery worker + Celery Beat all on a single Fly machine,
+instead of docker-compose's one-container-per-service split. Fly bills per machine, not per
+process, so splitting this into 4 machines (like Render would force) would be 4x the cost for no
+benefit at hobby scale. Running Redis in-process like this is only safe because of what this app
+actually keeps in it -- live game state and the Celery broker, both ephemeral -- never the durable
+hand history, which still lives in Postgres as its own separately-managed, properly backed-up Fly
+app. Losing Redis on a machine restart loses whatever hand is in progress, not game history.
+
+```bash
+fly auth login                       # opens a browser, one-time
+fly launch --no-deploy                # creates the app from fly.toml, asks before deploying
+fly postgres create                   # separate small managed Postgres app
+fly postgres attach <pg-app-name>     # injects DATABASE_URL into this app's secrets automatically
+fly secrets set POKER_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')"
+fly secrets set POKER_ALLOWED_HOSTS="<app-name>.fly.dev" POKER_CSRF_TRUSTED_ORIGINS="https://<app-name>.fly.dev"
+fly deploy
+```
+
+`<app-name>` is whatever `fly launch` actually created (matches `app = "..."` in `fly.toml` --
+edit that line first if the name in this file is already taken). Afterward, the game is at
+`https://<app-name>.fly.dev/play/<table_id>/<player_id>/` -- send that link to friends.
+
+Known cost/scale tradeoffs of this specific setup, worth knowing before relying on it:
+- One machine means one point of failure -- if it restarts (a deploy, a crash, Fly's own
+  maintenance), every in-progress hand at every table is lost at once, not just one table's.
+- `min_machines_running = 1` with `auto_stop_machines = false` (see `fly.toml`) means this machine
+  never scales to zero -- that's the point (no cold-start delay for a friend joining), but it also
+  means it's never free; it bills continuously.
+- No load testing has been done against this -- fine for a handful of friends, not evaluated
+  beyond that.
+
 ## Known gaps (tracked, not hidden)
 
 - Performance/concurrency testing (the other half of Milestone 9) hasn't been done yet -- no load

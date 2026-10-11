@@ -33,6 +33,15 @@ DEBUG = os.environ.get('POKER_DEBUG', 'true').lower() == 'true'
 
 ALLOWED_HOSTS = [h for h in os.environ.get('POKER_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]
 
+# Fly (like most PaaS hosts) terminates TLS at its edge proxy and forwards
+# plain HTTP internally, with this header saying what the original request
+# actually was -- without it, Django thinks every request is insecure HTTP,
+# which breaks CSRF validation on POST forms (join/create game) once this
+# is actually served over https.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get('POKER_CSRF_TRUSTED_ORIGINS', '').split(',') if o]
+
 
 # Application definition
 
@@ -105,17 +114,28 @@ CELERY_RESULT_BACKEND = f'redis://{POKER_REDIS_HOST}:{POKER_REDIS_PORT}/0'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 # Env-var overrides so the same settings work against a local Homebrew
-# Postgres (no password by default) and a real deployment later.
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POKER_DB_NAME', 'pokerbot'),
-        'USER': os.environ.get('POKER_DB_USER', ''),
-        'PASSWORD': os.environ.get('POKER_DB_PASSWORD', ''),
-        'HOST': os.environ.get('POKER_DB_HOST', 'localhost'),
-        'PORT': os.environ.get('POKER_DB_PORT', '5432'),
+# Postgres (no password by default), docker-compose, and a real deployment.
+#
+# Fly Postgres (and most managed Postgres providers) hand you a single
+# DATABASE_URL connection string via `fly postgres attach`, not separate
+# host/user/password vars -- so when that var is present, parse it with
+# dj_database_url instead of asking the user to manually copy its pieces
+# into four separate POKER_DB_* secrets.
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL:
+    import dj_database_url
+    DATABASES = {'default': dj_database_url.parse(DATABASE_URL)}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('POKER_DB_NAME', 'pokerbot'),
+            'USER': os.environ.get('POKER_DB_USER', ''),
+            'PASSWORD': os.environ.get('POKER_DB_PASSWORD', ''),
+            'HOST': os.environ.get('POKER_DB_HOST', 'localhost'),
+            'PORT': os.environ.get('POKER_DB_PORT', '5432'),
+        }
     }
-}
 
 
 # Password validation

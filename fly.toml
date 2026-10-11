@@ -1,0 +1,29 @@
+# Fly app config. `app` must be globally unique across all Fly accounts --
+# if `ekansh-poker-bot` is taken, `fly launch`/`fly apps create` will ask
+# for a different one; update this line to match whatever it actually
+# creates.
+app = "ekansh-poker-bot"
+primary_region = "iad"
+
+[build]
+
+# bin/start-fly.sh runs Redis + the web app + the Celery worker + Celery
+# Beat all on this one machine (see that script's own comment for why).
+[processes]
+  app = "bin/start-fly.sh"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # A friend should be able to join without waiting through a cold start
+  # -- unlike a typical stateless web app, this one keeps live game state
+  # in the same machine's in-process Redis, so scaling to zero between
+  # visits would silently wipe any hand in progress, not just add
+  # latency.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
