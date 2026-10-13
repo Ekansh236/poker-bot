@@ -1,8 +1,8 @@
 # Fly app config. `app` must be globally unique across all Fly accounts --
-# if `ekansh-poker-bot` is taken, `fly launch`/`fly apps create` will ask
+# if `holdem-bot-arena` is taken, `fly launch`/`fly apps create` will ask
 # for a different one; update this line to match whatever it actually
 # creates.
-app = "ekansh-poker-bot"
+app = "holdem-bot-arena"
 primary_region = "iad"
 
 [build]
